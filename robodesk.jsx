@@ -3,12 +3,279 @@ import { useState, useEffect, useCallback } from "react";
 const STORAGE_KEY = "robodesk-contacts";
 const TAGS_KEY = "robodesk-tags";
 const THEME_KEY = "robodesk-theme";
+const LANG_KEY = "robodesk-lang";
+const LOCALE_MAP = { de: "de-DE", en: "en-GB", da: "da-DK", fr: "fr-FR" };
+const SUPPORTED_LANGS = ["de", "en", "da", "fr"];
 
 const DEFAULT_TAGS = [
   "TYPO3", "dkd", "Client", "Partner", "Community", "Speaker", "Friend", "Family", "Prospect", "Vendor"
 ];
 
 const RELATIONSHIP_TYPES = ["Professional", "Personal", "Community", "Client", "Partner"];
+
+// ── TRANSLATIONS ──
+const translations = {
+  de: {
+    "nav.dashboard": "Dashboard", "nav.contacts": "Kontakte",
+    "header.contacts_count": "{n} Kontakte", "header.overdue": "{n} überfällig", "header.due": "{n} fällig",
+    "header.data": "Daten", "header.csv_export": "CSV exportieren", "header.csv_import": "CSV importieren",
+    "header.vcf_export": "VCF exportieren", "header.vcf_import": "VCF importieren",
+    "header.toggle_theme": "Theme wechseln", "header.new_contact": "+ Neuer Kontakt",
+    "import.result": "{imported} Kontakte importiert", "import.skipped": ", {skipped} Duplikate übersprungen",
+    "toolbar.search": "Suchen nach Name, Firma, Tag...", "toolbar.all_tags": "Alle Tags",
+    "toolbar.all_types": "Alle Typen", "toolbar.sort_name": "Name A–Z",
+    "toolbar.sort_last_contact": "Letzter Kontakt", "toolbar.sort_followup": "Follow-Up",
+    "toolbar.sort_recent": "Neueste zuerst", "toolbar.sort_strength": "Beziehungsstärke",
+    "toolbar.due": "Fällig", "toolbar.select": "Auswählen",
+    "bulk.selected": "{n} ausgewählt", "bulk.deselect": "Auswahl aufheben",
+    "bulk.select_all": "Alle auswählen", "bulk.set_tags": "Tags setzen",
+    "bulk.delete": "Löschen", "bulk.cancel": "Abbrechen",
+    "bulk.confirm_delete": "{n} Kontakte löschen?", "bulk.confirm_yes": "Ja, löschen",
+    "empty.no_contacts": "Noch keine Kontakte. Starte mit dem ersten!",
+    "empty.not_found": "Keine Kontakte gefunden.",
+    "empty.welcome": "Willkommen bei RoboDesk! Starte mit dem ersten Kontakt.",
+    "dash.recommendations": "Handlungsempfehlungen", "dash.show_less": "Weniger anzeigen",
+    "dash.show_all": "Alle {n} anzeigen", "dash.overview": "Übersicht",
+    "dash.total_contacts": "Kontakte gesamt", "dash.interactions_month": "Interaktionen diesen Monat",
+    "dash.overdue_followups": "Überfällige Follow-ups", "dash.new_month": "Neu diesen Monat",
+    "dash.most_active": "Aktivster Bereich ({n})", "dash.avg_strength": "Ø Beziehungsstärke",
+    "dash.activity_weeks": "Aktivität (8 Wochen)", "dash.contacts_by_type": "Kontakte nach Typ",
+    "dash.recent_activity": "Letzte Aktivitäten",
+    "time.today": "Heute", "time.yesterday": "Gestern",
+    "time.days_ago": "vor {n} Tagen", "time.days_short": "vor {n}d",
+    "type.note": "Notiz", "type.call": "Anruf", "type.meeting": "Meeting",
+    "type.email": "E-Mail", "type.event": "Event", "type.idea": "Idee", "type.with": "mit",
+    "nudge.overdue": "Follow-up ist {n} Tage überfällig",
+    "nudge.due_singular": "Follow-up ist seit {n} Tag fällig",
+    "nudge.due_plural": "Follow-up ist seit {n} Tagen fällig",
+    "nudge.neglected": "Seit {n} Tagen kein Kontakt",
+    "nudge.untouched": "Neuer Kontakt ohne Interaktion",
+    "nudge.no_followup": "Kein Follow-up gesetzt",
+    "nudge.momentum": "{n} Interaktionen in 30 Tagen — gute Dynamik!",
+    "strength.new": "Neu", "strength.strong": "Stark", "strength.good": "Gut",
+    "strength.fading": "Nachlassend", "strength.cold": "Kalt",
+    "detail.back": "← Zurück", "detail.edit": "Bearbeiten",
+    "detail.contact_info": "Kontaktdaten", "detail.status": "Status",
+    "detail.created": "Erstellt", "detail.last_contact": "Letzter Kontakt",
+    "detail.next_followup": "Nächstes Follow-Up", "detail.set_followup": "Follow-Up setzen:",
+    "detail.notes": "Notizen", "detail.tags": "Tags",
+    "detail.add_interaction": "Interaktion hinzufügen",
+    "detail.what_happened": "Was ist passiert?", "detail.add": "Hinzufügen",
+    "detail.timeline": "Timeline ({n})",
+    "detail.confirm_delete": "Kontakt {name} wirklich löschen?",
+    "detail.confirm_yes": "Ja, löschen", "detail.cancel": "Abbrechen",
+    "form.edit_title": "Kontakt bearbeiten", "form.new_title": "Neuer Kontakt",
+    "form.name": "Name *", "form.email": "E-Mail", "form.phone": "Telefon",
+    "form.company": "Firma", "form.role": "Rolle / Position",
+    "form.location": "Standort", "form.linkedin": "LinkedIn", "form.website": "Website",
+    "form.relationship_type": "Beziehungstyp", "form.next_followup": "Nächstes Follow-Up",
+    "form.notes": "Notizen", "form.tags": "Tags",
+    "form.name_placeholder": "Vor- und Nachname", "form.company_placeholder": "Firmenname",
+    "form.role_placeholder": "z.B. CTO, Freelancer", "form.location_placeholder": "Stadt, Land",
+    "form.type_select": "— wählen —",
+    "form.notes_placeholder": "Kontext, Gesprächsthemen, Interessen...",
+    "form.new_tag": "Neuer Tag...", "form.cancel": "Abbrechen",
+    "form.save": "Speichern", "form.create": "Kontakt anlegen",
+    "chart.interactions": "{n} Interaktionen", "chart.unknown": "Unbekannt",
+  },
+  en: {
+    "nav.dashboard": "Dashboard", "nav.contacts": "Contacts",
+    "header.contacts_count": "{n} Contacts", "header.overdue": "{n} overdue", "header.due": "{n} due",
+    "header.data": "Data", "header.csv_export": "Export CSV", "header.csv_import": "Import CSV",
+    "header.vcf_export": "Export VCF", "header.vcf_import": "Import VCF",
+    "header.toggle_theme": "Change theme", "header.new_contact": "+ New Contact",
+    "import.result": "{imported} contacts imported", "import.skipped": ", {skipped} duplicates skipped",
+    "toolbar.search": "Search by name, company, tag...", "toolbar.all_tags": "All Tags",
+    "toolbar.all_types": "All Types", "toolbar.sort_name": "Name A–Z",
+    "toolbar.sort_last_contact": "Last Contact", "toolbar.sort_followup": "Follow-Up",
+    "toolbar.sort_recent": "Newest First", "toolbar.sort_strength": "Relationship Strength",
+    "toolbar.due": "Due", "toolbar.select": "Select",
+    "bulk.selected": "{n} selected", "bulk.deselect": "Deselect All",
+    "bulk.select_all": "Select All", "bulk.set_tags": "Set Tags",
+    "bulk.delete": "Delete", "bulk.cancel": "Cancel",
+    "bulk.confirm_delete": "Delete {n} contacts?", "bulk.confirm_yes": "Yes, delete",
+    "empty.no_contacts": "No contacts yet. Start with your first one!",
+    "empty.not_found": "No contacts found.",
+    "empty.welcome": "Welcome to RoboDesk! Start with your first contact.",
+    "dash.recommendations": "Recommendations", "dash.show_less": "Show less",
+    "dash.show_all": "Show all {n}", "dash.overview": "Overview",
+    "dash.total_contacts": "Total Contacts", "dash.interactions_month": "Interactions This Month",
+    "dash.overdue_followups": "Overdue Follow-ups", "dash.new_month": "New This Month",
+    "dash.most_active": "Most Active Area ({n})", "dash.avg_strength": "Avg. Relationship Strength",
+    "dash.activity_weeks": "Activity (8 Weeks)", "dash.contacts_by_type": "Contacts by Type",
+    "dash.recent_activity": "Recent Activity",
+    "time.today": "Today", "time.yesterday": "Yesterday",
+    "time.days_ago": "{n} days ago", "time.days_short": "{n}d ago",
+    "type.note": "Note", "type.call": "Call", "type.meeting": "Meeting",
+    "type.email": "Email", "type.event": "Event", "type.idea": "Idea", "type.with": "with",
+    "nudge.overdue": "Follow-up is {n} days overdue",
+    "nudge.due_singular": "Follow-up has been due for {n} day",
+    "nudge.due_plural": "Follow-up has been due for {n} days",
+    "nudge.neglected": "No contact for {n} days",
+    "nudge.untouched": "New contact without interaction",
+    "nudge.no_followup": "No follow-up set",
+    "nudge.momentum": "{n} interactions in 30 days — good momentum!",
+    "strength.new": "New", "strength.strong": "Strong", "strength.good": "Good",
+    "strength.fading": "Declining", "strength.cold": "Cold",
+    "detail.back": "← Back", "detail.edit": "Edit",
+    "detail.contact_info": "Contact Details", "detail.status": "Status",
+    "detail.created": "Created", "detail.last_contact": "Last Contact",
+    "detail.next_followup": "Next Follow-Up", "detail.set_followup": "Set Follow-Up:",
+    "detail.notes": "Notes", "detail.tags": "Tags",
+    "detail.add_interaction": "Add Interaction",
+    "detail.what_happened": "What happened?", "detail.add": "Add",
+    "detail.timeline": "Timeline ({n})",
+    "detail.confirm_delete": "Really delete contact {name}?",
+    "detail.confirm_yes": "Yes, delete", "detail.cancel": "Cancel",
+    "form.edit_title": "Edit Contact", "form.new_title": "New Contact",
+    "form.name": "Name *", "form.email": "Email", "form.phone": "Phone",
+    "form.company": "Company", "form.role": "Role / Position",
+    "form.location": "Location", "form.linkedin": "LinkedIn", "form.website": "Website",
+    "form.relationship_type": "Relationship Type", "form.next_followup": "Next Follow-Up",
+    "form.notes": "Notes", "form.tags": "Tags",
+    "form.name_placeholder": "First and last name", "form.company_placeholder": "Company name",
+    "form.role_placeholder": "e.g. CTO, Freelancer", "form.location_placeholder": "City, Country",
+    "form.type_select": "— select —",
+    "form.notes_placeholder": "Context, topics, interests...",
+    "form.new_tag": "New tag...", "form.cancel": "Cancel",
+    "form.save": "Save", "form.create": "Create Contact",
+    "chart.interactions": "{n} Interactions", "chart.unknown": "Unknown",
+  },
+  da: {
+    "nav.dashboard": "Dashboard", "nav.contacts": "Kontakter",
+    "header.contacts_count": "{n} Kontakter", "header.overdue": "{n} forsinket", "header.due": "{n} forfalden",
+    "header.data": "Data", "header.csv_export": "Eksporter CSV", "header.csv_import": "Importer CSV",
+    "header.vcf_export": "Eksporter VCF", "header.vcf_import": "Importer VCF",
+    "header.toggle_theme": "Skift tema", "header.new_contact": "+ Ny kontakt",
+    "import.result": "{imported} kontakter importeret", "import.skipped": ", {skipped} duplikater sprunget over",
+    "toolbar.search": "Søg efter navn, firma, tag...", "toolbar.all_tags": "Alle tags",
+    "toolbar.all_types": "Alle typer", "toolbar.sort_name": "Navn A–Z",
+    "toolbar.sort_last_contact": "Sidste kontakt", "toolbar.sort_followup": "Opfølgning",
+    "toolbar.sort_recent": "Nyeste først", "toolbar.sort_strength": "Relationsstyrke",
+    "toolbar.due": "Forfalden", "toolbar.select": "Vælg",
+    "bulk.selected": "{n} valgt", "bulk.deselect": "Fjern markering",
+    "bulk.select_all": "Vælg alle", "bulk.set_tags": "Sæt tags",
+    "bulk.delete": "Slet", "bulk.cancel": "Afbryd",
+    "bulk.confirm_delete": "Slet {n} kontakter?", "bulk.confirm_yes": "Ja, slet",
+    "empty.no_contacts": "Ingen kontakter endnu. Start med den første!",
+    "empty.not_found": "Ingen kontakter fundet.",
+    "empty.welcome": "Velkommen til RoboDesk! Start med den første kontakt.",
+    "dash.recommendations": "Handlingsanbefalinger", "dash.show_less": "Vis mindre",
+    "dash.show_all": "Vis alle {n}", "dash.overview": "Oversigt",
+    "dash.total_contacts": "Kontakter i alt", "dash.interactions_month": "Interaktioner denne måned",
+    "dash.overdue_followups": "Forfaldne opfølgninger", "dash.new_month": "Nye denne måned",
+    "dash.most_active": "Mest aktive område ({n})", "dash.avg_strength": "Ø Relationsstyrke",
+    "dash.activity_weeks": "Aktivitet (8 uger)", "dash.contacts_by_type": "Kontakter efter type",
+    "dash.recent_activity": "Seneste aktiviteter",
+    "time.today": "I dag", "time.yesterday": "I går",
+    "time.days_ago": "for {n} dage siden", "time.days_short": "{n}d siden",
+    "type.note": "Notat", "type.call": "Opkald", "type.meeting": "Møde",
+    "type.email": "E-mail", "type.event": "Begivenhed", "type.idea": "Idé", "type.with": "med",
+    "nudge.overdue": "Opfølgning er {n} dage forsinket",
+    "nudge.due_singular": "Opfølgning har været forfalden i {n} dag",
+    "nudge.due_plural": "Opfølgning har været forfalden i {n} dage",
+    "nudge.neglected": "Ingen kontakt i {n} dage",
+    "nudge.untouched": "Ny kontakt uden interaktion",
+    "nudge.no_followup": "Ingen opfølgning angivet",
+    "nudge.momentum": "{n} interaktioner på 30 dage — god dynamik!",
+    "strength.new": "Ny", "strength.strong": "Stærk", "strength.good": "God",
+    "strength.fading": "Aftagende", "strength.cold": "Kold",
+    "detail.back": "← Tilbage", "detail.edit": "Rediger",
+    "detail.contact_info": "Kontaktoplysninger", "detail.status": "Status",
+    "detail.created": "Oprettet", "detail.last_contact": "Sidste kontakt",
+    "detail.next_followup": "Næste opfølgning", "detail.set_followup": "Sæt opfølgning:",
+    "detail.notes": "Noter", "detail.tags": "Tags",
+    "detail.add_interaction": "Tilføj interaktion",
+    "detail.what_happened": "Hvad er der sket?", "detail.add": "Tilføj",
+    "detail.timeline": "Tidslinje ({n})",
+    "detail.confirm_delete": "Vil du virkelig slette {name}?",
+    "detail.confirm_yes": "Ja, slet", "detail.cancel": "Afbryd",
+    "form.edit_title": "Rediger kontakt", "form.new_title": "Ny kontakt",
+    "form.name": "Navn *", "form.email": "E-mail", "form.phone": "Telefon",
+    "form.company": "Firma", "form.role": "Rolle / Position",
+    "form.location": "Lokation", "form.linkedin": "LinkedIn", "form.website": "Websted",
+    "form.relationship_type": "Relationstype", "form.next_followup": "Næste opfølgning",
+    "form.notes": "Noter", "form.tags": "Tags",
+    "form.name_placeholder": "For- og efternavn", "form.company_placeholder": "Firmanavn",
+    "form.role_placeholder": "f.eks. CTO, freelancer", "form.location_placeholder": "By, land",
+    "form.type_select": "— vælg —",
+    "form.notes_placeholder": "Kontekst, samtaleemner, interesser...",
+    "form.new_tag": "Nyt tag...", "form.cancel": "Afbryd",
+    "form.save": "Gem", "form.create": "Opret kontakt",
+    "chart.interactions": "{n} Interaktioner", "chart.unknown": "Ukendt",
+  },
+  fr: {
+    "nav.dashboard": "Tableau de bord", "nav.contacts": "Contacts",
+    "header.contacts_count": "{n} Contacts", "header.overdue": "{n} en retard", "header.due": "{n} à échéance",
+    "header.data": "Données", "header.csv_export": "Exporter CSV", "header.csv_import": "Importer CSV",
+    "header.vcf_export": "Exporter VCF", "header.vcf_import": "Importer VCF",
+    "header.toggle_theme": "Changer de thème", "header.new_contact": "+ Nouveau contact",
+    "import.result": "{imported} contacts importés", "import.skipped": ", {skipped} doublons ignorés",
+    "toolbar.search": "Rechercher par nom, entreprise, tag...", "toolbar.all_tags": "Tous les tags",
+    "toolbar.all_types": "Tous les types", "toolbar.sort_name": "Nom A–Z",
+    "toolbar.sort_last_contact": "Dernier contact", "toolbar.sort_followup": "Suivi",
+    "toolbar.sort_recent": "Plus récents", "toolbar.sort_strength": "Force relationnelle",
+    "toolbar.due": "À échéance", "toolbar.select": "Sélectionner",
+    "bulk.selected": "{n} sélectionné(s)", "bulk.deselect": "Désélectionner",
+    "bulk.select_all": "Tout sélectionner", "bulk.set_tags": "Définir les tags",
+    "bulk.delete": "Supprimer", "bulk.cancel": "Annuler",
+    "bulk.confirm_delete": "Supprimer {n} contacts ?", "bulk.confirm_yes": "Oui, supprimer",
+    "empty.no_contacts": "Pas encore de contacts. Commencez par le premier !",
+    "empty.not_found": "Aucun contact trouvé.",
+    "empty.welcome": "Bienvenue sur RoboDesk ! Commencez par votre premier contact.",
+    "dash.recommendations": "Recommandations", "dash.show_less": "Afficher moins",
+    "dash.show_all": "Afficher les {n}", "dash.overview": "Aperçu",
+    "dash.total_contacts": "Total des contacts", "dash.interactions_month": "Interactions ce mois-ci",
+    "dash.overdue_followups": "Suivis en retard", "dash.new_month": "Nouveaux ce mois-ci",
+    "dash.most_active": "Domaine le plus actif ({n})", "dash.avg_strength": "Ø Force relationnelle",
+    "dash.activity_weeks": "Activité (8 semaines)", "dash.contacts_by_type": "Contacts par type",
+    "dash.recent_activity": "Activité récente",
+    "time.today": "Aujourd'hui", "time.yesterday": "Hier",
+    "time.days_ago": "il y a {n} jours", "time.days_short": "il y a {n}j",
+    "type.note": "Note", "type.call": "Appel", "type.meeting": "Réunion",
+    "type.email": "E-mail", "type.event": "Événement", "type.idea": "Idée", "type.with": "avec",
+    "nudge.overdue": "Le suivi est en retard de {n} jours",
+    "nudge.due_singular": "Le suivi est à échéance depuis {n} jour",
+    "nudge.due_plural": "Le suivi est à échéance depuis {n} jours",
+    "nudge.neglected": "Aucun contact depuis {n} jours",
+    "nudge.untouched": "Nouveau contact sans interaction",
+    "nudge.no_followup": "Aucun suivi défini",
+    "nudge.momentum": "{n} interactions en 30 jours — bonne dynamique !",
+    "strength.new": "Nouveau", "strength.strong": "Fort", "strength.good": "Bien",
+    "strength.fading": "En baisse", "strength.cold": "Froid",
+    "detail.back": "← Retour", "detail.edit": "Modifier",
+    "detail.contact_info": "Coordonnées", "detail.status": "Statut",
+    "detail.created": "Créé", "detail.last_contact": "Dernier contact",
+    "detail.next_followup": "Prochain suivi", "detail.set_followup": "Définir un suivi :",
+    "detail.notes": "Notes", "detail.tags": "Tags",
+    "detail.add_interaction": "Ajouter une interaction",
+    "detail.what_happened": "Que s'est-il passé ?", "detail.add": "Ajouter",
+    "detail.timeline": "Chronologie ({n})",
+    "detail.confirm_delete": "Voulez-vous vraiment supprimer {name} ?",
+    "detail.confirm_yes": "Oui, supprimer", "detail.cancel": "Annuler",
+    "form.edit_title": "Modifier le contact", "form.new_title": "Nouveau contact",
+    "form.name": "Nom *", "form.email": "E-mail", "form.phone": "Téléphone",
+    "form.company": "Entreprise", "form.role": "Rôle / Position",
+    "form.location": "Localisation", "form.linkedin": "LinkedIn", "form.website": "Site web",
+    "form.relationship_type": "Type de relation", "form.next_followup": "Prochain suivi",
+    "form.notes": "Notes", "form.tags": "Tags",
+    "form.name_placeholder": "Prénom et nom", "form.company_placeholder": "Nom de l'entreprise",
+    "form.role_placeholder": "p. ex. CTO, freelance", "form.location_placeholder": "Ville, pays",
+    "form.type_select": "— choisir —",
+    "form.notes_placeholder": "Contexte, sujets de conversation, centres d'intérêt...",
+    "form.new_tag": "Nouveau tag...", "form.cancel": "Annuler",
+    "form.save": "Enregistrer", "form.create": "Créer un contact",
+    "chart.interactions": "{n} Interactions", "chart.unknown": "Inconnu",
+  },
+};
+
+function i18n(lang, key, params = {}) {
+  let str = translations[lang]?.[key] || translations.de[key] || key;
+  for (const [k, v] of Object.entries(params)) {
+    str = str.replace(`{${k}}`, v);
+  }
+  return str;
+}
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
@@ -21,9 +288,9 @@ function daysAgo(dateStr) {
   return Math.floor((now - d) / (1000 * 60 * 60 * 24));
 }
 
-function formatDate(dateStr) {
+function formatDate(dateStr, lang = "de") {
   if (!dateStr) return "—";
-  return new Date(dateStr).toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "numeric" });
+  return new Date(dateStr).toLocaleDateString(LOCALE_MAP[lang] || "de-DE", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function getFollowUpUrgency(contact) {
@@ -245,31 +512,31 @@ function generateNudges(contacts) {
 
     if (urgency === "overdue") {
       nudges.push({ type: "overdue", priority: 1, contactId: c.id, contactName: c.name,
-        message: `Follow-up ist ${daysPast} Tage überfällig` });
+        msgKey: "nudge.overdue", msgParams: { n: daysPast } });
     } else if (urgency === "due") {
       nudges.push({ type: "due", priority: 2, contactId: c.id, contactName: c.name,
-        message: `Follow-up ist seit ${daysPast} Tag${daysPast === 1 ? "" : "en"} fällig` });
+        msgKey: daysPast === 1 ? "nudge.due_singular" : "nudge.due_plural", msgParams: { n: daysPast } });
     }
 
     if (lastDays !== null && lastDays > 60 && interactionCount > 0) {
       nudges.push({ type: "neglected", priority: 3, contactId: c.id, contactName: c.name,
-        message: `Seit ${lastDays} Tagen kein Kontakt` });
+        msgKey: "nudge.neglected", msgParams: { n: lastDays } });
     }
 
     const createdDays = daysAgo(c.createdAt);
     if (createdDays > 7 && interactionCount === 0) {
       nudges.push({ type: "untouched", priority: 4, contactId: c.id, contactName: c.name,
-        message: "Neuer Kontakt ohne Interaktion" });
+        msgKey: "nudge.untouched", msgParams: {} });
     }
 
     if (interactionCount > 0 && !c.nextFollowUp) {
       nudges.push({ type: "no-followup", priority: 5, contactId: c.id, contactName: c.name,
-        message: "Kein Follow-up gesetzt" });
+        msgKey: "nudge.no_followup", msgParams: {} });
     }
 
     if (recentInteractions >= 3) {
       nudges.push({ type: "momentum", priority: 6, contactId: c.id, contactName: c.name,
-        message: `${recentInteractions} Interaktionen in 30 Tagen — gute Dynamik!` });
+        msgKey: "nudge.momentum", msgParams: { n: recentInteractions } });
     }
   }
 
@@ -279,7 +546,7 @@ function generateNudges(contacts) {
 // ── RELATIONSHIP STRENGTH ──
 function getRelationshipStrength(contact) {
   const interactions = contact.interactions || [];
-  if (interactions.length === 0 && !contact.lastContact) return { score: 0, label: "Neu", color: "#9ca3af" };
+  if (interactions.length === 0 && !contact.lastContact) return { score: 0, labelKey: "strength.new", color: "#9ca3af" };
 
   const now = new Date();
 
@@ -294,7 +561,7 @@ function getRelationshipStrength(contact) {
   const frequency = Math.min(30, perMonth * 10);
 
   // Variety (15%): distinct interaction types
-  const types = new Set(interactions.map(i => i.type));
+  const types = new Set(interactions.map(x => x.type));
   const variety = types.size >= 5 ? 15 : types.size >= 3 ? 10 : types.size >= 1 ? 5 : 0;
 
   // Consistency (15%): low standard deviation of gaps
@@ -311,10 +578,10 @@ function getRelationshipStrength(contact) {
   }
 
   const score = Math.round(recency + frequency + variety + consistency);
-  if (score >= 80) return { score, label: "Stark", color: "#16a34a" };
-  if (score >= 50) return { score, label: "Gut", color: null }; // null = use accent color
-  if (score >= 20) return { score, label: "Nachlassend", color: "#d97706" };
-  return { score, label: "Kalt", color: "#9ca3af" };
+  if (score >= 80) return { score, labelKey: "strength.strong", color: "#16a34a" };
+  if (score >= 50) return { score, labelKey: "strength.good", color: null }; // null = use accent color
+  if (score >= 20) return { score, labelKey: "strength.fading", color: "#d97706" };
+  return { score, labelKey: "strength.cold", color: "#9ca3af" };
 }
 
 // ── THEME DEFINITIONS ──
@@ -432,8 +699,10 @@ export default function RoboDesk() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBulkTag, setShowBulkTag] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [lang, setLang] = useState("de");
 
   const t = themes[theme];
+  const i = (key, params) => i18n(lang, key, params);
 
   useEffect(() => {
     async function load() {
@@ -448,6 +717,10 @@ export default function RoboDesk() {
       try {
         const res = await window.storage.get(THEME_KEY);
         if (res?.value) setTheme(res.value);
+      } catch (e) {}
+      try {
+        const res = await window.storage.get(LANG_KEY);
+        if (res?.value && SUPPORTED_LANGS.includes(res.value)) setLang(res.value);
       } catch (e) {}
       setLoading(false);
     }
@@ -493,6 +766,15 @@ export default function RoboDesk() {
     setTheme(next);
     try { await window.storage.set(THEME_KEY, next); } catch (e) {}
   };
+
+  const changeLang = async (newLang) => {
+    setLang(newLang);
+    try { await window.storage.set(LANG_KEY, newLang); } catch (e) {}
+  };
+
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
 
   const saveContacts = useCallback(async (newContacts) => {
     setContacts(newContacts);
@@ -676,41 +958,44 @@ export default function RoboDesk() {
             <span style={s.logoIcon}>⚡</span> RoboDesk
           </h1>
           <div style={s.navTabs}>
-            <button style={{...s.navTab, ...(view === "dashboard" ? s.navTabActive : {})}} onClick={() => setView("dashboard")}>Dashboard</button>
-            <button style={{...s.navTab, ...(view === "list" || view === "detail" || view === "edit" ? s.navTabActive : {})}} onClick={() => setView("list")}>Kontakte</button>
+            <button style={{...s.navTab, ...(view === "dashboard" ? s.navTabActive : {})}} onClick={() => setView("dashboard")}>{i("nav.dashboard")}</button>
+            <button style={{...s.navTab, ...(view === "list" || view === "detail" || view === "edit" ? s.navTabActive : {})}} onClick={() => setView("list")}>{i("nav.contacts")}</button>
           </div>
         </div>
         <div style={s.headerRight} data-header-right>
           <div style={s.statsRow}>
-            <span style={s.stat}>{contacts.length} Kontakte</span>
+            <span style={s.stat}>{i("header.contacts_count", { n: contacts.length })}</span>
             {dueCount > 0 && (
               <span style={{...s.stat, ...s.statAlert}} onClick={() => { setShowFollowUpOnly(!showFollowUpOnly); setView("list"); }}>
-                {overdueCount > 0 ? `${overdueCount} überfällig` : `${dueCount} fällig`}
+                {overdueCount > 0 ? i("header.overdue", { n: overdueCount }) : i("header.due", { n: dueCount })}
               </span>
             )}
           </div>
           <div style={{ position: "relative" }} data-menu>
-            <button style={s.themeToggle} onClick={() => setShowDataMenu(!showDataMenu)} title="Daten">📁</button>
+            <button style={s.themeToggle} onClick={() => setShowDataMenu(!showDataMenu)} title={i("header.data")}>📁</button>
             {showDataMenu && (
               <div style={s.dataMenu}>
-                <button style={s.dataMenuItem} data-menu-item onClick={() => { exportCsv(contacts); setShowDataMenu(false); }}>CSV exportieren</button>
-                <button style={s.dataMenuItem} data-menu-item onClick={() => handleImportFile(".csv", importCsv)}>CSV importieren</button>
+                <button style={s.dataMenuItem} data-menu-item onClick={() => { exportCsv(contacts); setShowDataMenu(false); }}>{i("header.csv_export")}</button>
+                <button style={s.dataMenuItem} data-menu-item onClick={() => handleImportFile(".csv", importCsv)}>{i("header.csv_import")}</button>
                 <div style={s.dataMenuDivider} />
-                <button style={s.dataMenuItem} data-menu-item onClick={() => { exportVcf(contacts); setShowDataMenu(false); }}>VCF exportieren</button>
-                <button style={s.dataMenuItem} data-menu-item onClick={() => handleImportFile(".vcf", importVcf)}>VCF importieren</button>
+                <button style={s.dataMenuItem} data-menu-item onClick={() => { exportVcf(contacts); setShowDataMenu(false); }}>{i("header.vcf_export")}</button>
+                <button style={s.dataMenuItem} data-menu-item onClick={() => handleImportFile(".vcf", importVcf)}>{i("header.vcf_import")}</button>
               </div>
             )}
           </div>
-          <button style={s.themeToggle} onClick={toggleTheme} title="Theme wechseln">
+          <select style={s.langSelect} value={lang} onChange={e => changeLang(e.target.value)}>
+            {SUPPORTED_LANGS.map(l => <option key={l} value={l}>{l.toUpperCase()}</option>)}
+          </select>
+          <button style={s.themeToggle} onClick={toggleTheme} title={i("header.toggle_theme")}>
             {theme === "light" ? "🌙" : "☀️"}
           </button>
-          <button style={s.addBtn} onClick={() => { setView("add"); setSelectedId(null); }}>+ Neuer Kontakt</button>
+          <button style={s.addBtn} onClick={() => { setView("add"); setSelectedId(null); }}>{i("header.new_contact")}</button>
         </div>
       </header>
 
       {importResult && (
         <div style={s.importToast}>
-          {importResult.imported.length} Kontakte importiert{importResult.skipped > 0 ? `, ${importResult.skipped} Duplikate übersprungen` : ""}
+          {i("import.result", { imported: importResult.imported.length })}{importResult.skipped > 0 ? i("import.skipped", { skipped: importResult.skipped }) : ""}
         </div>
       )}
 
@@ -718,16 +1003,16 @@ export default function RoboDesk() {
         <Dashboard
           contacts={contacts}
           onOpenContact={(id) => { setSelectedId(id); setView("detail"); }}
-          s={s} t={t}
+          s={s} t={t} i={i} lang={lang}
         />
       )}
 
       {view === "add" && (
-        <ContactForm onSave={addContact} onCancel={() => setView("dashboard")} tags={tags} onAddTag={(tag) => saveTags([...tags, tag])} s={s} t={t} />
+        <ContactForm onSave={addContact} onCancel={() => setView("dashboard")} tags={tags} onAddTag={(tag) => saveTags([...tags, tag])} s={s} t={t} i={i} />
       )}
 
       {view === "edit" && selectedContact && (
-        <ContactForm contact={selectedContact} onSave={(c) => { updateContact(c); setView("detail"); }} onCancel={() => setView("detail")} tags={tags} onAddTag={(tag) => saveTags([...tags, tag])} s={s} t={t} />
+        <ContactForm contact={selectedContact} onSave={(c) => { updateContact(c); setView("detail"); }} onCancel={() => setView("detail")} tags={tags} onAddTag={(tag) => saveTags([...tags, tag])} s={s} t={t} i={i} />
       )}
 
       {view === "detail" && selectedContact && (
@@ -736,9 +1021,9 @@ export default function RoboDesk() {
           onEdit={() => setView("edit")}
           onDelete={deleteContact}
           onBack={() => { setView("list"); setSelectedId(null); }}
-          onAddInteraction={(i) => addInteraction(selectedContact.id, i)}
+          onAddInteraction={(inter) => addInteraction(selectedContact.id, inter)}
           onUpdate={updateContact}
-          s={s} t={t}
+          s={s} t={t} i={i} lang={lang}
         />
       )}
 
@@ -746,12 +1031,12 @@ export default function RoboDesk() {
         <>
           {bulkMode ? (
             <div style={s.bulkToolbar} data-toolbar>
-              <span style={s.bulkCount}>{selectedIds.size} ausgewählt</span>
+              <span style={s.bulkCount}>{i("bulk.selected", { n: selectedIds.size })}</span>
               <button style={s.bulkBtn} onClick={bulkSelectAll}>
-                {selectedIds.size === filtered.length ? "Auswahl aufheben" : "Alle auswählen"}
+                {selectedIds.size === filtered.length ? i("bulk.deselect") : i("bulk.select_all")}
               </button>
               <div style={{ position: "relative" }}>
-                <button style={s.bulkBtn} onClick={() => setShowBulkTag(!showBulkTag)}>Tags setzen</button>
+                <button style={s.bulkBtn} onClick={() => setShowBulkTag(!showBulkTag)}>{i("bulk.set_tags")}</button>
                 {showBulkTag && (
                   <div style={s.dataMenu}>
                     {tags.map(tag => (
@@ -766,59 +1051,59 @@ export default function RoboDesk() {
               </div>
               <button style={s.bulkBtn} onClick={() => bulkExport("csv")} disabled={selectedIds.size === 0}>CSV</button>
               <button style={s.bulkBtn} onClick={() => bulkExport("vcf")} disabled={selectedIds.size === 0}>VCF</button>
-              <button style={{...s.bulkBtn, color: "#dc2626"}} onClick={() => setShowBulkDelete(true)} disabled={selectedIds.size === 0}>Löschen</button>
-              <button style={s.bulkBtn} onClick={exitBulkMode}>Abbrechen</button>
+              <button style={{...s.bulkBtn, color: "#dc2626"}} onClick={() => setShowBulkDelete(true)} disabled={selectedIds.size === 0}>{i("bulk.delete")}</button>
+              <button style={s.bulkBtn} onClick={exitBulkMode}>{i("bulk.cancel")}</button>
             </div>
           ) : (
             <div style={s.toolbar} data-toolbar>
               <input
                 style={s.searchInput}
-                placeholder="Suchen nach Name, Firma, Tag..."
+                placeholder={i("toolbar.search")}
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 data-search
               />
               <select style={s.filterSelect} value={filterTag} onChange={e => setFilterTag(e.target.value)}>
-                <option value="all">Alle Tags</option>
+                <option value="all">{i("toolbar.all_tags")}</option>
                 {tags.map(tag => <option key={tag} value={tag}>{tag}</option>)}
               </select>
               <select style={s.filterSelect} value={filterType} onChange={e => setFilterType(e.target.value)}>
-                <option value="all">Alle Typen</option>
+                <option value="all">{i("toolbar.all_types")}</option>
                 {RELATIONSHIP_TYPES.map(rt => <option key={rt} value={rt}>{rt}</option>)}
               </select>
               <select style={s.filterSelect} value={sortBy} onChange={e => setSortBy(e.target.value)}>
-                <option value="name">Name A–Z</option>
-                <option value="lastContact">Letzter Kontakt</option>
-                <option value="followUp">Follow-Up</option>
-                <option value="recent">Neueste zuerst</option>
-                <option value="strength">Beziehungsstärke</option>
+                <option value="name">{i("toolbar.sort_name")}</option>
+                <option value="lastContact">{i("toolbar.sort_last_contact")}</option>
+                <option value="followUp">{i("toolbar.sort_followup")}</option>
+                <option value="recent">{i("toolbar.sort_recent")}</option>
+                <option value="strength">{i("toolbar.sort_strength")}</option>
               </select>
               <button
                 style={{...s.filterToggle, ...(showFollowUpOnly ? s.filterToggleActive : {})}}
                 onClick={() => setShowFollowUpOnly(!showFollowUpOnly)}
-              >⏰ Fällig</button>
-              <button style={s.filterToggle} onClick={() => setBulkMode(true)}>☑ Auswählen</button>
+              >⏰ {i("toolbar.due")}</button>
+              <button style={s.filterToggle} onClick={() => setBulkMode(true)}>☑ {i("toolbar.select")}</button>
             </div>
           )}
 
           {showBulkDelete && (
             <div style={s.importToast}>
-              <span>{selectedIds.size} Kontakte löschen? </span>
-              <button style={{...s.bulkBtn, color: "#fff", background: "#dc2626", marginLeft: 8}} onClick={bulkDelete}>Ja, löschen</button>
-              <button style={{...s.bulkBtn, marginLeft: 4}} onClick={() => setShowBulkDelete(false)}>Abbrechen</button>
+              <span>{i("bulk.confirm_delete", { n: selectedIds.size })} </span>
+              <button style={{...s.bulkBtn, color: "#fff", background: "#dc2626", marginLeft: 8}} onClick={bulkDelete}>{i("bulk.confirm_yes")}</button>
+              <button style={{...s.bulkBtn, marginLeft: 4}} onClick={() => setShowBulkDelete(false)}>{i("bulk.cancel")}</button>
             </div>
           )}
 
           {filtered.length === 0 ? (
             <div style={s.emptyState}>
               <div style={s.emptyIcon}>📇</div>
-              <p style={s.emptyText}>{contacts.length === 0 ? "Noch keine Kontakte. Starte mit dem ersten!" : "Keine Kontakte gefunden."}</p>
+              <p style={s.emptyText}>{contacts.length === 0 ? i("empty.no_contacts") : i("empty.not_found")}</p>
             </div>
           ) : (
             <div style={s.contactGrid} data-contact-grid>
               {filtered.map(c => (
                 <ContactCard
-                  key={c.id} contact={c} s={s} t={t}
+                  key={c.id} contact={c} s={s} t={t} i={i} lang={lang}
                   bulkMode={bulkMode}
                   selected={selectedIds.has(c.id)}
                   onClick={() => {
@@ -836,7 +1121,7 @@ export default function RoboDesk() {
 }
 
 // ── CHARTS ──
-function ActivityChart({ contacts, t }) {
+function ActivityChart({ contacts, t, i }) {
   const now = new Date();
   const weeks = [];
   for (let i = 7; i >= 0; i--) {
@@ -856,13 +1141,13 @@ function ActivityChart({ contacts, t }) {
 
   return (
     <svg width={totalW} height={h + padBottom} style={{ display: "block" }}>
-      {weeks.map((w, i) => {
+      {weeks.map((w, idx) => {
         const barH = (w.count / max) * h;
-        const x = i * (barW + gap);
+        const x = idx * (barW + gap);
         return (
-          <g key={i}>
+          <g key={idx}>
             <rect x={x} y={h - barH} width={barW} height={barH} rx={4} fill={t.accentPrimary} opacity={0.7}>
-              <title>{w.count} Interaktionen</title>
+              <title>{i("chart.interactions", { n: w.count })}</title>
             </rect>
             {w.count > 0 && (
               <text x={x + barW / 2} y={h - barH - 4} textAnchor="middle" fontSize={10} fill={t.textMuted}>{w.count}</text>
@@ -875,10 +1160,10 @@ function ActivityChart({ contacts, t }) {
   );
 }
 
-function TypeDonut({ contacts, t }) {
+function TypeDonut({ contacts, t, i }) {
   const counts = {};
   contacts.forEach(c => {
-    const rt = c.relationshipType || "Unbekannt";
+    const rt = c.relationshipType || i("chart.unknown");
     counts[rt] = (counts[rt] || 0) + 1;
   });
   const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
@@ -888,7 +1173,7 @@ function TypeDonut({ contacts, t }) {
   const r = 50, cx = 60, cy = 60, inner = 30;
   let angle = -Math.PI / 2;
 
-  const arcs = entries.map(([name, count], i) => {
+  const arcs = entries.map(([name, count], idx) => {
     const sweep = (count / total) * 2 * Math.PI;
     const startAngle = angle;
     angle += sweep;
@@ -899,20 +1184,20 @@ function TypeDonut({ contacts, t }) {
     const ix1 = cx + inner * Math.cos(endAngle), iy1 = cy + inner * Math.sin(endAngle);
     const ix2 = cx + inner * Math.cos(startAngle), iy2 = cy + inner * Math.sin(startAngle);
     const d = `M${x1},${y1} A${r},${r} 0 ${largeArc} 1 ${x2},${y2} L${ix1},${iy1} A${inner},${inner} 0 ${largeArc} 0 ${ix2},${iy2} Z`;
-    return { name, count, color: colors[i % colors.length], d };
+    return { name, count, color: colors[idx % colors.length], d };
   });
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
       <svg width={120} height={120}>
-        {arcs.map((a, i) => (
+        {arcs.map((a, idx) => (
           <path key={i} d={a.d} fill={a.color} opacity={0.8}>
             <title>{a.name}: {a.count}</title>
           </path>
         ))}
       </svg>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {arcs.map((a, i) => (
+        {arcs.map((a, idx) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: t.textSecondary }}>
             <div style={{ width: 10, height: 10, borderRadius: 2, background: a.color, flexShrink: 0 }} />
             <span>{a.name} ({a.count})</span>
@@ -923,7 +1208,7 @@ function TypeDonut({ contacts, t }) {
   );
 }
 
-function InteractionTimeline({ interactions, t }) {
+function InteractionTimeline({ interactions, t, lang }) {
   if (!interactions || interactions.length === 0) return null;
   const sorted = [...interactions].sort((a, b) => new Date(a.date) - new Date(b.date));
   const typeIcons = { note: "📝", call: "📞", meeting: "🤝", email: "✉️", event: "🎪", idea: "💡" };
@@ -934,7 +1219,7 @@ function InteractionTimeline({ interactions, t }) {
 
   return (
     <div style={{ position: "relative", marginLeft: 20, paddingLeft: 30, borderLeft: `2px solid ${t.accentPrimary}33` }}>
-      {sorted.map((int, i) => {
+      {sorted.map((int, idx) => {
         const days = (new Date(int.date) - first) / (1000 * 60 * 60 * 24);
         const top = span > 0 ? (days / span) * (h - 40) : i * 40;
         return (
@@ -947,7 +1232,7 @@ function InteractionTimeline({ interactions, t }) {
               <span>{typeIcons[int.type] || "📝"}</span>
             </div>
             <div style={{ paddingLeft: 4 }}>
-              <span style={{ fontSize: 11, color: t.textMuted }}>{formatDate(int.date)}</span>
+              <span style={{ fontSize: 11, color: t.textMuted }}>{formatDate(int.date, lang)}</span>
               <p style={{ fontSize: 13, color: t.textSecondary, margin: "2px 0 0", lineHeight: 1.4 }}>{int.content}</p>
             </div>
           </div>
@@ -958,22 +1243,22 @@ function InteractionTimeline({ interactions, t }) {
 }
 
 // ── DASHBOARD ──
-function Dashboard({ contacts, onOpenContact, s, t }) {
+function Dashboard({ contacts, onOpenContact, s, t, i, lang }) {
   const nudges = generateNudges(contacts);
   const [showAllNudges, setShowAllNudges] = useState(false);
   const displayNudges = showAllNudges ? nudges : nudges.slice(0, 5);
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const allInteractions = contacts.flatMap(c => (c.interactions || []).map(i => ({ ...i, contactName: c.name, contactId: c.id })));
+  const allInteractions = contacts.flatMap(c => (c.interactions || []).map(x => ({ ...x, contactName: c.name, contactId: c.id })));
   const monthlyInteractions = allInteractions.filter(i => new Date(i.date) >= monthStart);
   const newThisMonth = contacts.filter(c => new Date(c.createdAt) >= monthStart);
   const overdueContacts = contacts.filter(c => getFollowUpUrgency(c) === "overdue");
 
   const typeCounts = {};
-  monthlyInteractions.forEach(i => {
-    const c = contacts.find(x => x.id === i.contactId);
-    const rt = c?.relationshipType || "Unbekannt";
+  monthlyInteractions.forEach(inter => {
+    const c = contacts.find(x => x.id === inter.contactId);
+    const rt = c?.relationshipType || i("chart.unknown");
     typeCounts[rt] = (typeCounts[rt] || 0) + 1;
   });
   const mostActiveType = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0];
@@ -990,14 +1275,14 @@ function Dashboard({ contacts, onOpenContact, s, t }) {
     <div style={s.dashboardWrap} data-dashboard>
       {nudges.length > 0 && (
         <div style={s.dashSection}>
-          <h3 style={s.dashTitle}>Handlungsempfehlungen</h3>
+          <h3 style={s.dashTitle}>{i("dash.recommendations")}</h3>
           <div style={s.nudgeGrid}>
-            {displayNudges.map((n, i) => (
-              <div key={i} style={{...s.nudgeCard, borderLeftColor: nudgeColors[n.type]}} onClick={() => onOpenContact(n.contactId)}>
+            {displayNudges.map((n, idx) => (
+              <div key={idx} style={{...s.nudgeCard, borderLeftColor: nudgeColors[n.type]}} onClick={() => onOpenContact(n.contactId)}>
                 <span style={s.nudgeIcon}>{nudgeIcons[n.type]}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <strong style={s.nudgeName}>{n.contactName}</strong>
-                  <p style={s.nudgeMsg}>{n.message}</p>
+                  <p style={s.nudgeMsg}>{i(n.msgKey, n.msgParams)}</p>
                 </div>
                 <span style={s.nudgeArrow}>→</span>
               </div>
@@ -1005,41 +1290,41 @@ function Dashboard({ contacts, onOpenContact, s, t }) {
           </div>
           {nudges.length > 5 && (
             <button style={s.showAllBtn} onClick={() => setShowAllNudges(!showAllNudges)}>
-              {showAllNudges ? "Weniger anzeigen" : `Alle ${nudges.length} anzeigen`}
+              {showAllNudges ? i("dash.show_less") : i("dash.show_all", { n: nudges.length })}
             </button>
           )}
         </div>
       )}
 
       <div style={s.dashSection}>
-        <h3 style={s.dashTitle}>Übersicht</h3>
+        <h3 style={s.dashTitle}>{i("dash.overview")}</h3>
         <div style={s.statsGrid} data-stats-grid>
           <div style={s.statCard}>
             <span style={s.statNumber}>{contacts.length}</span>
-            <span style={s.statLabel}>Kontakte gesamt</span>
+            <span style={s.statLabel}>{i("dash.total_contacts")}</span>
           </div>
           <div style={s.statCard}>
             <span style={s.statNumber}>{monthlyInteractions.length}</span>
-            <span style={s.statLabel}>Interaktionen diesen Monat</span>
+            <span style={s.statLabel}>{i("dash.interactions_month")}</span>
           </div>
           <div style={{...s.statCard, ...(overdueContacts.length > 0 ? { borderColor: "#dc262633" } : {})}}>
             <span style={{...s.statNumber, ...(overdueContacts.length > 0 ? { color: "#dc2626" } : {})}}>{overdueContacts.length}</span>
-            <span style={s.statLabel}>Überfällige Follow-ups</span>
+            <span style={s.statLabel}>{i("dash.overdue_followups")}</span>
           </div>
           <div style={s.statCard}>
             <span style={s.statNumber}>{newThisMonth.length}</span>
-            <span style={s.statLabel}>Neu diesen Monat</span>
+            <span style={s.statLabel}>{i("dash.new_month")}</span>
           </div>
           {mostActiveType && (
             <div style={s.statCard}>
               <span style={s.statNumber}>{mostActiveType[0]}</span>
-              <span style={s.statLabel}>Aktivster Bereich ({mostActiveType[1]})</span>
+              <span style={s.statLabel}>{i("dash.most_active", { n: mostActiveType[1] })}</span>
             </div>
           )}
           {contacts.length > 0 && (
             <div style={s.statCard}>
               <span style={{...s.statNumber, color: avgColor}}>{avgStrength}</span>
-              <span style={s.statLabel}>Ø Beziehungsstärke</span>
+              <span style={s.statLabel}>{i("dash.avg_strength")}</span>
             </div>
           )}
         </div>
@@ -1048,16 +1333,16 @@ function Dashboard({ contacts, onOpenContact, s, t }) {
       {allInteractions.length > 0 && (
         <div style={{...s.dashSection, display: "flex", gap: 32, flexWrap: "wrap", alignItems: "flex-start"}}>
           <div>
-            <h3 style={s.dashTitle}>Aktivität (8 Wochen)</h3>
+            <h3 style={s.dashTitle}>{i("dash.activity_weeks")}</h3>
             <div style={{...s.statCard, padding: "16px 20px", display: "inline-block"}}>
-              <ActivityChart contacts={contacts} t={t} />
+              <ActivityChart contacts={contacts} t={t} i={i} />
             </div>
           </div>
           {contacts.length > 0 && (
             <div>
-              <h3 style={s.dashTitle}>Kontakte nach Typ</h3>
+              <h3 style={s.dashTitle}>{i("dash.contacts_by_type")}</h3>
               <div style={{...s.statCard, padding: "16px 20px", display: "inline-block"}}>
-                <TypeDonut contacts={contacts} t={t} />
+                <TypeDonut contacts={contacts} t={t} i={i} />
               </div>
             </div>
           )}
@@ -1066,16 +1351,16 @@ function Dashboard({ contacts, onOpenContact, s, t }) {
 
       {recentActivity.length > 0 && (
         <div style={s.dashSection}>
-          <h3 style={s.dashTitle}>Letzte Aktivitäten</h3>
+          <h3 style={s.dashTitle}>{i("dash.recent_activity")}</h3>
           <div style={s.activityList}>
-            {recentActivity.map((a, i) => {
+            {recentActivity.map((a, idx) => {
               const d = daysAgo(a.date);
-              const relTime = d === 0 ? "Heute" : d === 1 ? "Gestern" : `vor ${d} Tagen`;
+              const relTime = d === 0 ? i("time.today") : d === 1 ? i("time.yesterday") : i("time.days_ago", { n: d });
               return (
-                <div key={i} style={s.activityItem} onClick={() => onOpenContact(a.contactId)}>
+                <div key={idx} style={s.activityItem} onClick={() => onOpenContact(a.contactId)}>
                   <span style={s.activityIcon}>{typeIcons[a.type] || "📝"}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <span style={s.activityText}>{a.type === "call" ? "Anruf" : a.type === "meeting" ? "Meeting" : a.type === "email" ? "E-Mail" : a.type === "event" ? "Event" : a.type === "idea" ? "Idee" : "Notiz"} mit <strong>{a.contactName}</strong></span>
+                    <span style={s.activityText}>{i(`type.${a.type}`) || i("type.note")} {i("type.with")} <strong>{a.contactName}</strong></span>
                     {a.content && <p style={s.activityContent}>{a.content.length > 80 ? a.content.slice(0, 80) + "…" : a.content}</p>}
                   </div>
                   <span style={s.activityTime}>{relTime}</span>
@@ -1089,7 +1374,7 @@ function Dashboard({ contacts, onOpenContact, s, t }) {
       {contacts.length === 0 && nudges.length === 0 && (
         <div style={s.emptyState}>
           <div style={s.emptyIcon}>📇</div>
-          <p style={s.emptyText}>Willkommen bei RoboDesk! Starte mit dem ersten Kontakt.</p>
+          <p style={s.emptyText}>{i("empty.welcome")}</p>
         </div>
       )}
     </div>
@@ -1097,7 +1382,7 @@ function Dashboard({ contacts, onOpenContact, s, t }) {
 }
 
 // ── CONTACT CARD ──
-function ContactCard({ contact, onClick, s, t, bulkMode, selected }) {
+function ContactCard({ contact, onClick, s, t, i, lang, bulkMode, selected }) {
   const urgency = getFollowUpUrgency(contact);
   const lastDays = daysAgo(contact.lastContact);
   const initials = (contact.name || "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
@@ -1124,11 +1409,11 @@ function ContactCard({ contact, onClick, s, t, bulkMode, selected }) {
       </div>
       <div style={s.cardMeta}>
         {lastDays !== null && (
-          <span style={s.cardMetaItem}>{lastDays === 0 ? "Heute" : lastDays === 1 ? "Gestern" : `vor ${lastDays}d`}</span>
+          <span style={s.cardMetaItem}>{lastDays === 0 ? i("time.today") : lastDays === 1 ? i("time.yesterday") : i("time.days_short", { n: lastDays })}</span>
         )}
         {contact.nextFollowUp && (
           <span style={{...s.cardMetaItem, color: urgencyColors[urgency] || t.textMuted}}>
-            ⏰ {formatDate(contact.nextFollowUp)}
+            ⏰ {formatDate(contact.nextFollowUp, lang)}
           </span>
         )}
       </div>
@@ -1146,7 +1431,7 @@ function ContactCard({ contact, onClick, s, t, bulkMode, selected }) {
 }
 
 // ── CONTACT DETAIL ──
-function ContactDetail({ contact, onEdit, onDelete, onBack, onAddInteraction, onUpdate, s, t }) {
+function ContactDetail({ contact, onEdit, onDelete, onBack, onAddInteraction, onUpdate, s, t, i, lang }) {
   const [newNote, setNewNote] = useState("");
   const [noteType, setNoteType] = useState("note");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -1164,7 +1449,7 @@ function ContactDetail({ contact, onEdit, onDelete, onBack, onAddInteraction, on
 
   return (
     <div style={s.detailView}>
-      <button style={s.backBtn} onClick={onBack}>← Zurück</button>
+      <button style={s.backBtn} onClick={onBack}>{i("detail.back")}</button>
 
       <div style={s.detailHeader}>
         <div style={{...s.avatarLarge, backgroundColor: stringToColor(contact.name || "")}}>{initials}</div>
@@ -1172,31 +1457,31 @@ function ContactDetail({ contact, onEdit, onDelete, onBack, onAddInteraction, on
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <h2 style={s.detailName}>{contact.name}</h2>
             <span style={{ fontSize: 12, fontWeight: 600, color: strengthColor, background: strengthColor + "1a", padding: "2px 8px", borderRadius: 10 }}>
-              {strength.score} · {strength.label}
+              {strength.score} · {i(strength.labelKey)}
             </span>
           </div>
           {contact.company && <p style={s.detailRole}>{contact.role ? `${contact.role} · ` : ""}{contact.company}</p>}
           {contact.relationshipType && <span style={s.relType}>{contact.relationshipType}</span>}
         </div>
         <div style={s.detailActions}>
-          <button style={s.editBtn} onClick={onEdit}>✏️ Bearbeiten</button>
+          <button style={s.editBtn} onClick={onEdit}>✏️ {i("detail.edit")}</button>
           <button style={s.deleteBtn} onClick={() => setShowDeleteConfirm(true)}>🗑</button>
         </div>
       </div>
 
       {showDeleteConfirm && (
         <div style={s.confirmBox}>
-          <p style={{ margin: "0 0 10px", color: t.textPrimary }}>Kontakt <strong>{contact.name}</strong> wirklich löschen?</p>
+          <p style={{ margin: "0 0 10px", color: t.textPrimary }}>{i("detail.confirm_delete", { name: contact.name })}</p>
           <div style={{ display: "flex", gap: 8 }}>
-            <button style={s.confirmYes} onClick={() => onDelete(contact.id)}>Ja, löschen</button>
-            <button style={s.confirmNo} onClick={() => setShowDeleteConfirm(false)}>Abbrechen</button>
+            <button style={s.confirmYes} onClick={() => onDelete(contact.id)}>{i("detail.confirm_yes")}</button>
+            <button style={s.confirmNo} onClick={() => setShowDeleteConfirm(false)}>{i("detail.cancel")}</button>
           </div>
         </div>
       )}
 
       <div style={s.detailGrid} data-detail-grid>
         <div style={s.detailSection}>
-          <h4 style={s.sectionTitle}>Kontaktdaten</h4>
+          <h4 style={s.sectionTitle}>{i("detail.contact_info")}</h4>
           <div style={s.fieldGroup}>
             {contact.email && <p style={s.fieldLine}>✉️ <a href={`mailto:${contact.email}`} style={s.link}>{contact.email}</a></p>}
             {contact.phone && <p style={s.fieldLine}>📞 {contact.phone}</p>}
@@ -1207,13 +1492,13 @@ function ContactDetail({ contact, onEdit, onDelete, onBack, onAddInteraction, on
         </div>
 
         <div style={s.detailSection}>
-          <h4 style={s.sectionTitle}>Status</h4>
+          <h4 style={s.sectionTitle}>{i("detail.status")}</h4>
           <div style={s.fieldGroup}>
-            <p style={s.fieldLine}>📅 Erstellt: {formatDate(contact.createdAt)}</p>
-            <p style={s.fieldLine}>🤝 Letzter Kontakt: {formatDate(contact.lastContact)}</p>
-            <p style={s.fieldLine}>⏰ Nächstes Follow-Up: {formatDate(contact.nextFollowUp)}</p>
+            <p style={s.fieldLine}>📅 {i("detail.created")}: {formatDate(contact.createdAt, lang)}</p>
+            <p style={s.fieldLine}>🤝 {i("detail.last_contact")}: {formatDate(contact.lastContact, lang)}</p>
+            <p style={s.fieldLine}>⏰ {i("detail.next_followup")}: {formatDate(contact.nextFollowUp, lang)}</p>
             <div style={{ marginTop: 8 }}>
-              <label style={s.smallLabel}>Follow-Up setzen:</label>
+              <label style={s.smallLabel}>{i("detail.set_followup")}</label>
               <input
                 type="date"
                 style={s.dateInput}
@@ -1227,20 +1512,20 @@ function ContactDetail({ contact, onEdit, onDelete, onBack, onAddInteraction, on
 
       {contact.notes && (
         <div style={s.detailSection}>
-          <h4 style={s.sectionTitle}>Notizen</h4>
+          <h4 style={s.sectionTitle}>{i("detail.notes")}</h4>
           <p style={s.notesBlock}>{contact.notes}</p>
         </div>
       )}
 
       {(contact.tags || []).length > 0 && (
         <div style={s.detailSection}>
-          <h4 style={s.sectionTitle}>Tags</h4>
+          <h4 style={s.sectionTitle}>{i("detail.tags")}</h4>
           <div style={s.tagRow}>{contact.tags.map(tag => <span key={tag} style={s.tag}>{tag}</span>)}</div>
         </div>
       )}
 
       <div style={s.detailSection}>
-        <h4 style={s.sectionTitle}>Interaktion hinzufügen</h4>
+        <h4 style={s.sectionTitle}>{i("detail.add_interaction")}</h4>
         <div style={s.interactionBox}>
           <div style={s.typeSelector}>
             {Object.entries(typeIcons).map(([k, icon]) => (
@@ -1249,19 +1534,19 @@ function ContactDetail({ contact, onEdit, onDelete, onBack, onAddInteraction, on
           </div>
           <textarea
             style={s.textArea}
-            placeholder="Was ist passiert?"
+            placeholder={i("detail.what_happened")}
             value={newNote}
             onChange={e => setNewNote(e.target.value)}
             rows={2}
           />
-          <button style={s.addInteractionBtn} onClick={handleAddInteraction} disabled={!newNote.trim()}>Hinzufügen</button>
+          <button style={s.addInteractionBtn} onClick={handleAddInteraction} disabled={!newNote.trim()}>{i("detail.add")}</button>
         </div>
       </div>
 
       {(contact.interactions || []).length > 0 && (
         <div style={s.detailSection}>
-          <h4 style={s.sectionTitle}>Timeline ({contact.interactions.length})</h4>
-          <InteractionTimeline interactions={contact.interactions} t={t} />
+          <h4 style={s.sectionTitle}>{i("detail.timeline", { n: contact.interactions.length })}</h4>
+          <InteractionTimeline interactions={contact.interactions} t={t} lang={lang} />
         </div>
       )}
     </div>
@@ -1269,7 +1554,7 @@ function ContactDetail({ contact, onEdit, onDelete, onBack, onAddInteraction, on
 }
 
 // ── CONTACT FORM ──
-function ContactForm({ contact, onSave, onCancel, tags, onAddTag, s, t }) {
+function ContactForm({ contact, onSave, onCancel, tags, onAddTag, s, t, i }) {
   const [form, setForm] = useState(contact || {
     name: "", email: "", phone: "", company: "", role: "",
     location: "", linkedin: "", website: "",
@@ -1296,76 +1581,76 @@ function ContactForm({ contact, onSave, onCancel, tags, onAddTag, s, t }) {
   return (
     <div style={s.formOverlay}>
       <div style={s.formCard}>
-        <h2 style={s.formTitle}>{contact ? "Kontakt bearbeiten" : "Neuer Kontakt"}</h2>
+        <h2 style={s.formTitle}>{contact ? i("form.edit_title") : i("form.new_title")}</h2>
 
         <div style={s.formGrid} data-form-grid>
           <div style={s.formGroup}>
-            <label style={s.label}>Name *</label>
-            <input style={s.input} value={form.name} onChange={e => set("name", e.target.value)} placeholder="Vor- und Nachname" />
+            <label style={s.label}>{i("form.name")}</label>
+            <input style={s.input} value={form.name} onChange={e => set("name", e.target.value)} placeholder={i("form.name_placeholder")} />
           </div>
           <div style={s.formGroup}>
-            <label style={s.label}>E-Mail</label>
+            <label style={s.label}>{i("form.email")}</label>
             <input style={s.input} type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="email@example.com" />
           </div>
           <div style={s.formGroup}>
-            <label style={s.label}>Telefon</label>
+            <label style={s.label}>{i("form.phone")}</label>
             <input style={s.input} value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+49..." />
           </div>
           <div style={s.formGroup}>
-            <label style={s.label}>Firma</label>
-            <input style={s.input} value={form.company} onChange={e => set("company", e.target.value)} placeholder="Firmenname" />
+            <label style={s.label}>{i("form.company")}</label>
+            <input style={s.input} value={form.company} onChange={e => set("company", e.target.value)} placeholder={i("form.company_placeholder")} />
           </div>
           <div style={s.formGroup}>
-            <label style={s.label}>Rolle / Position</label>
-            <input style={s.input} value={form.role} onChange={e => set("role", e.target.value)} placeholder="z.B. CTO, Freelancer" />
+            <label style={s.label}>{i("form.role")}</label>
+            <input style={s.input} value={form.role} onChange={e => set("role", e.target.value)} placeholder={i("form.role_placeholder")} />
           </div>
           <div style={s.formGroup}>
-            <label style={s.label}>Standort</label>
-            <input style={s.input} value={form.location} onChange={e => set("location", e.target.value)} placeholder="Stadt, Land" />
+            <label style={s.label}>{i("form.location")}</label>
+            <input style={s.input} value={form.location} onChange={e => set("location", e.target.value)} placeholder={i("form.location_placeholder")} />
           </div>
           <div style={s.formGroup}>
-            <label style={s.label}>LinkedIn</label>
+            <label style={s.label}>{i("form.linkedin")}</label>
             <input style={s.input} value={form.linkedin} onChange={e => set("linkedin", e.target.value)} placeholder="https://linkedin.com/in/..." />
           </div>
           <div style={s.formGroup}>
-            <label style={s.label}>Website</label>
+            <label style={s.label}>{i("form.website")}</label>
             <input style={s.input} value={form.website} onChange={e => set("website", e.target.value)} placeholder="https://..." />
           </div>
           <div style={s.formGroup}>
-            <label style={s.label}>Beziehungstyp</label>
+            <label style={s.label}>{i("form.relationship_type")}</label>
             <select style={s.input} value={form.relationshipType} onChange={e => set("relationshipType", e.target.value)}>
-              <option value="">— wählen —</option>
+              <option value="">{i("form.type_select")}</option>
               {RELATIONSHIP_TYPES.map(rt => <option key={rt} value={rt}>{rt}</option>)}
             </select>
           </div>
           <div style={s.formGroup}>
-            <label style={s.label}>Nächstes Follow-Up</label>
+            <label style={s.label}>{i("form.next_followup")}</label>
             <input style={s.input} type="date" value={form.nextFollowUp || ""} onChange={e => set("nextFollowUp", e.target.value || null)} />
           </div>
         </div>
 
         <div style={s.formGroup}>
-          <label style={s.label}>Notizen</label>
-          <textarea style={{...s.input, minHeight: 80}} value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Kontext, Gesprächsthemen, Interessen..." />
+          <label style={s.label}>{i("form.notes")}</label>
+          <textarea style={{...s.input, minHeight: 80}} value={form.notes} onChange={e => set("notes", e.target.value)} placeholder={i("form.notes_placeholder")} />
         </div>
 
         <div style={s.formGroup}>
-          <label style={s.label}>Tags</label>
+          <label style={s.label}>{i("form.tags")}</label>
           <div style={s.tagSelector}>
             {tags.map(tag => (
               <button key={tag} style={{...s.tagBtn, ...((form.tags || []).includes(tag) ? s.tagBtnActive : {})}} onClick={() => toggleTag(tag)}>{tag}</button>
             ))}
           </div>
           <div style={s.addTagRow}>
-            <input style={s.tagInput} placeholder="Neuer Tag..." value={newTag} onChange={e => setNewTag(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAddNewTag()} />
+            <input style={s.tagInput} placeholder={i("form.new_tag")} value={newTag} onChange={e => setNewTag(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAddNewTag()} />
             <button style={s.tagAddBtn} onClick={handleAddNewTag}>+</button>
           </div>
         </div>
 
         <div style={s.formActions}>
-          <button style={s.cancelBtn} onClick={onCancel}>Abbrechen</button>
+          <button style={s.cancelBtn} onClick={onCancel}>{i("form.cancel")}</button>
           <button style={s.saveBtn} onClick={() => form.name.trim() && onSave(form)} disabled={!form.name.trim()}>
-            {contact ? "Speichern" : "Kontakt anlegen"}
+            {contact ? i("form.save") : i("form.create")}
           </button>
         </div>
       </div>
@@ -1395,6 +1680,11 @@ function makeStyles(t) {
     logoIcon: { fontSize: 18 },
     subtitle: { fontSize: 11, color: t.subtitleColor, textTransform: "uppercase", letterSpacing: "2.5px", fontWeight: 500 },
     headerRight: { display: "flex", alignItems: "center", gap: 12 },
+    langSelect: {
+      padding: "6px 8px", borderRadius: 6, border: `1px solid ${t.inputBorder}`,
+      background: t.inputBg, color: t.textSecondary, fontSize: 11, fontWeight: 600,
+      cursor: "pointer", fontFamily: "inherit", outline: "none", letterSpacing: "0.5px",
+    },
     statsRow: { display: "flex", gap: 12, alignItems: "center" },
     stat: { fontSize: 13, color: t.textSecondary, fontVariantNumeric: "tabular-nums" },
     statAlert: { color: "#dc2626", cursor: "pointer", fontWeight: 600 },
