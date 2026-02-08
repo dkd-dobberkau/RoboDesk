@@ -276,6 +276,47 @@ function generateNudges(contacts) {
   return nudges.sort((a, b) => a.priority - b.priority);
 }
 
+// ── RELATIONSHIP STRENGTH ──
+function getRelationshipStrength(contact) {
+  const interactions = contact.interactions || [];
+  if (interactions.length === 0 && !contact.lastContact) return { score: 0, label: "Neu", color: "#9ca3af" };
+
+  const now = new Date();
+
+  // Recency (40%): exponential decay from last contact
+  const lastDays = contact.lastContact ? daysAgo(contact.lastContact) : 999;
+  const recency = Math.max(0, 40 * Math.exp(-lastDays / 45));
+
+  // Frequency (30%): interactions per month over last 6 months
+  const sixMonthsAgo = new Date(now - 180 * 24 * 60 * 60 * 1000);
+  const recentCount = interactions.filter(i => new Date(i.date) >= sixMonthsAgo).length;
+  const perMonth = recentCount / 6;
+  const frequency = Math.min(30, perMonth * 10);
+
+  // Variety (15%): distinct interaction types
+  const types = new Set(interactions.map(i => i.type));
+  const variety = types.size >= 5 ? 15 : types.size >= 3 ? 10 : types.size >= 1 ? 5 : 0;
+
+  // Consistency (15%): low standard deviation of gaps
+  let consistency = 0;
+  if (interactions.length >= 3) {
+    const sorted = [...interactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const gaps = [];
+    for (let i = 1; i < sorted.length; i++) {
+      gaps.push((new Date(sorted[i].date) - new Date(sorted[i - 1].date)) / (1000 * 60 * 60 * 24));
+    }
+    const avg = gaps.reduce((s, g) => s + g, 0) / gaps.length;
+    const stddev = Math.sqrt(gaps.reduce((s, g) => s + (g - avg) ** 2, 0) / gaps.length);
+    consistency = Math.max(0, 15 * (1 - stddev / (avg + 1)));
+  }
+
+  const score = Math.round(recency + frequency + variety + consistency);
+  if (score >= 80) return { score, label: "Stark", color: "#16a34a" };
+  if (score >= 50) return { score, label: "Gut", color: null }; // null = use accent color
+  if (score >= 20) return { score, label: "Nachlassend", color: "#d97706" };
+  return { score, label: "Kalt", color: "#9ca3af" };
+}
+
 // ── THEME DEFINITIONS ──
 const themes = {
   light: {
@@ -533,6 +574,7 @@ export default function RoboDesk() {
       return new Date(a.nextFollowUp) - new Date(b.nextFollowUp);
     }
     if (sortBy === "recent") return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+    if (sortBy === "strength") return getRelationshipStrength(b).score - getRelationshipStrength(a).score;
     return 0;
   });
 
@@ -667,6 +709,7 @@ export default function RoboDesk() {
               <option value="lastContact">Letzter Kontakt</option>
               <option value="followUp">Follow-Up</option>
               <option value="recent">Neueste zuerst</option>
+              <option value="strength">Beziehungsstärke</option>
             </select>
             <button
               style={{...s.filterToggle, ...(showFollowUpOnly ? s.filterToggleActive : {})}}
@@ -712,6 +755,9 @@ function Dashboard({ contacts, onOpenContact, s, t }) {
     typeCounts[rt] = (typeCounts[rt] || 0) + 1;
   });
   const mostActiveType = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0];
+  const avgStrength = contacts.length > 0 ? Math.round(contacts.reduce((s, c) => s + getRelationshipStrength(c).score, 0) / contacts.length) : 0;
+  const avgStrengthData = getRelationshipStrength({ interactions: [], lastContact: null }); // just for color lookup
+  const avgColor = avgStrength >= 80 ? "#16a34a" : avgStrength >= 50 ? t.accentPrimary : avgStrength >= 20 ? "#d97706" : "#9ca3af";
 
   const recentActivity = [...allInteractions].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
   const typeIcons = { note: "📝", call: "📞", meeting: "🤝", email: "✉️", event: "🎪", idea: "💡" };
@@ -768,6 +814,12 @@ function Dashboard({ contacts, onOpenContact, s, t }) {
               <span style={s.statLabel}>Aktivster Bereich ({mostActiveType[1]})</span>
             </div>
           )}
+          {contacts.length > 0 && (
+            <div style={s.statCard}>
+              <span style={{...s.statNumber, color: avgColor}}>{avgStrength}</span>
+              <span style={s.statLabel}>Ø Beziehungsstärke</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -809,6 +861,8 @@ function ContactCard({ contact, onClick, s, t }) {
   const lastDays = daysAgo(contact.lastContact);
   const initials = (contact.name || "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
   const urgencyColors = { overdue: "#dc2626", due: "#ea580c", soon: "#d97706", upcoming: "#16a34a", none: "transparent" };
+  const strength = getRelationshipStrength(contact);
+  const strengthColor = strength.color || t.accentPrimary;
 
   return (
     <div style={s.card} onClick={onClick}>
@@ -836,6 +890,9 @@ function ContactCard({ contact, onClick, s, t }) {
           {contact.tags.length > 4 && <span style={{fontSize: 10, color: t.textMuted}}>+{contact.tags.length - 4}</span>}
         </div>
       )}
+      <div style={{...s.strengthBar, backgroundColor: strengthColor + "33"}}>
+        <div style={{...s.strengthFill, width: `${strength.score}%`, backgroundColor: strengthColor}} />
+      </div>
     </div>
   );
 }
@@ -854,6 +911,8 @@ function ContactDetail({ contact, onEdit, onDelete, onBack, onAddInteraction, on
 
   const typeIcons = { note: "📝", call: "📞", meeting: "🤝", email: "✉️", event: "🎪", idea: "💡" };
   const initials = (contact.name || "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+  const strength = getRelationshipStrength(contact);
+  const strengthColor = strength.color || t.accentPrimary;
 
   return (
     <div style={s.detailView}>
@@ -862,7 +921,12 @@ function ContactDetail({ contact, onEdit, onDelete, onBack, onAddInteraction, on
       <div style={s.detailHeader}>
         <div style={{...s.avatarLarge, backgroundColor: stringToColor(contact.name || "")}}>{initials}</div>
         <div style={{ flex: 1 }}>
-          <h2 style={s.detailName}>{contact.name}</h2>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <h2 style={s.detailName}>{contact.name}</h2>
+            <span style={{ fontSize: 12, fontWeight: 600, color: strengthColor, background: strengthColor + "1a", padding: "2px 8px", borderRadius: 10 }}>
+              {strength.score} · {strength.label}
+            </span>
+          </div>
           {contact.company && <p style={s.detailRole}>{contact.role ? `${contact.role} · ` : ""}{contact.company}</p>}
           {contact.relationshipType && <span style={s.relType}>{contact.relationshipType}</span>}
         </div>
@@ -1382,5 +1446,13 @@ function makeStyles(t) {
     activityText: { fontSize: 13, color: t.textPrimary },
     activityContent: { fontSize: 12, color: t.textMuted, margin: "2px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
     activityTime: { fontSize: 11, color: t.textMuted, flexShrink: 0, marginTop: 2 },
+
+    // Strength bar
+    strengthBar: {
+      height: 3, borderRadius: 2, marginTop: 10, overflow: "hidden",
+    },
+    strengthFill: {
+      height: "100%", borderRadius: 2, transition: "width 0.3s",
+    },
   };
 }
