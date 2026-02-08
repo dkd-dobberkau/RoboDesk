@@ -835,6 +835,128 @@ export default function RoboDesk() {
   );
 }
 
+// ── CHARTS ──
+function ActivityChart({ contacts, t }) {
+  const now = new Date();
+  const weeks = [];
+  for (let i = 7; i >= 0; i--) {
+    const weekStart = new Date(now - (i * 7 + now.getDay()) * 24 * 60 * 60 * 1000);
+    const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+    let count = 0;
+    contacts.forEach(c => (c.interactions || []).forEach(int => {
+      const d = new Date(int.date);
+      if (d >= weekStart && d < weekEnd) count++;
+    }));
+    const label = `${weekStart.getDate()}.${weekStart.getMonth() + 1}`;
+    weeks.push({ count, label });
+  }
+  const max = Math.max(1, ...weeks.map(w => w.count));
+  const barW = 32, gap = 8, h = 120, padBottom = 20;
+  const totalW = weeks.length * (barW + gap) - gap;
+
+  return (
+    <svg width={totalW} height={h + padBottom} style={{ display: "block" }}>
+      {weeks.map((w, i) => {
+        const barH = (w.count / max) * h;
+        const x = i * (barW + gap);
+        return (
+          <g key={i}>
+            <rect x={x} y={h - barH} width={barW} height={barH} rx={4} fill={t.accentPrimary} opacity={0.7}>
+              <title>{w.count} Interaktionen</title>
+            </rect>
+            {w.count > 0 && (
+              <text x={x + barW / 2} y={h - barH - 4} textAnchor="middle" fontSize={10} fill={t.textMuted}>{w.count}</text>
+            )}
+            <text x={x + barW / 2} y={h + 14} textAnchor="middle" fontSize={9} fill={t.textMuted}>{w.label}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function TypeDonut({ contacts, t }) {
+  const counts = {};
+  contacts.forEach(c => {
+    const rt = c.relationshipType || "Unbekannt";
+    counts[rt] = (counts[rt] || 0) + 1;
+  });
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  if (entries.length === 0) return null;
+  const total = contacts.length;
+  const colors = ["#2a6b5a", "#b05e3a", "#3a6b9d", "#6d5a8f", "#8b6534", "#4a7a4a"];
+  const r = 50, cx = 60, cy = 60, inner = 30;
+  let angle = -Math.PI / 2;
+
+  const arcs = entries.map(([name, count], i) => {
+    const sweep = (count / total) * 2 * Math.PI;
+    const startAngle = angle;
+    angle += sweep;
+    const endAngle = angle;
+    const largeArc = sweep > Math.PI ? 1 : 0;
+    const x1 = cx + r * Math.cos(startAngle), y1 = cy + r * Math.sin(startAngle);
+    const x2 = cx + r * Math.cos(endAngle), y2 = cy + r * Math.sin(endAngle);
+    const ix1 = cx + inner * Math.cos(endAngle), iy1 = cy + inner * Math.sin(endAngle);
+    const ix2 = cx + inner * Math.cos(startAngle), iy2 = cy + inner * Math.sin(startAngle);
+    const d = `M${x1},${y1} A${r},${r} 0 ${largeArc} 1 ${x2},${y2} L${ix1},${iy1} A${inner},${inner} 0 ${largeArc} 0 ${ix2},${iy2} Z`;
+    return { name, count, color: colors[i % colors.length], d };
+  });
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+      <svg width={120} height={120}>
+        {arcs.map((a, i) => (
+          <path key={i} d={a.d} fill={a.color} opacity={0.8}>
+            <title>{a.name}: {a.count}</title>
+          </path>
+        ))}
+      </svg>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {arcs.map((a, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: t.textSecondary }}>
+            <div style={{ width: 10, height: 10, borderRadius: 2, background: a.color, flexShrink: 0 }} />
+            <span>{a.name} ({a.count})</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InteractionTimeline({ interactions, t }) {
+  if (!interactions || interactions.length === 0) return null;
+  const sorted = [...interactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const typeIcons = { note: "📝", call: "📞", meeting: "🤝", email: "✉️", event: "🎪", idea: "💡" };
+  const first = new Date(sorted[0].date);
+  const last = new Date(sorted[sorted.length - 1].date);
+  const span = Math.max(1, (last - first) / (1000 * 60 * 60 * 24));
+  const h = Math.max(200, sorted.length * 40);
+
+  return (
+    <div style={{ position: "relative", marginLeft: 20, paddingLeft: 30, borderLeft: `2px solid ${t.accentPrimary}33` }}>
+      {sorted.map((int, i) => {
+        const days = (new Date(int.date) - first) / (1000 * 60 * 60 * 24);
+        const top = span > 0 ? (days / span) * (h - 40) : i * 40;
+        return (
+          <div key={int.id || i} style={{ position: "relative", marginBottom: 12 }}>
+            <div style={{
+              position: "absolute", left: -39, top: 2, width: 18, height: 18,
+              borderRadius: "50%", background: t.accentPrimary, display: "flex",
+              alignItems: "center", justifyContent: "center", fontSize: 10,
+            }}>
+              <span>{typeIcons[int.type] || "📝"}</span>
+            </div>
+            <div style={{ paddingLeft: 4 }}>
+              <span style={{ fontSize: 11, color: t.textMuted }}>{formatDate(int.date)}</span>
+              <p style={{ fontSize: 13, color: t.textSecondary, margin: "2px 0 0", lineHeight: 1.4 }}>{int.content}</p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── DASHBOARD ──
 function Dashboard({ contacts, onOpenContact, s, t }) {
   const nudges = generateNudges(contacts);
@@ -922,6 +1044,25 @@ function Dashboard({ contacts, onOpenContact, s, t }) {
           )}
         </div>
       </div>
+
+      {allInteractions.length > 0 && (
+        <div style={{...s.dashSection, display: "flex", gap: 32, flexWrap: "wrap", alignItems: "flex-start"}}>
+          <div>
+            <h3 style={s.dashTitle}>Aktivität (8 Wochen)</h3>
+            <div style={{...s.statCard, padding: "16px 20px", display: "inline-block"}}>
+              <ActivityChart contacts={contacts} t={t} />
+            </div>
+          </div>
+          {contacts.length > 0 && (
+            <div>
+              <h3 style={s.dashTitle}>Kontakte nach Typ</h3>
+              <div style={{...s.statCard, padding: "16px 20px", display: "inline-block"}}>
+                <TypeDonut contacts={contacts} t={t} />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {recentActivity.length > 0 && (
         <div style={s.dashSection}>
@@ -1119,18 +1260,8 @@ function ContactDetail({ contact, onEdit, onDelete, onBack, onAddInteraction, on
 
       {(contact.interactions || []).length > 0 && (
         <div style={s.detailSection}>
-          <h4 style={s.sectionTitle}>Verlauf ({contact.interactions.length})</h4>
-          <div style={s.timeline}>
-            {[...contact.interactions].reverse().map(i => (
-              <div key={i.id} style={s.timelineItem}>
-                <span style={s.timelineIcon}>{typeIcons[i.type] || "📝"}</span>
-                <div style={s.timelineContent}>
-                  <span style={s.timelineDate}>{formatDate(i.date)}</span>
-                  <p style={s.timelineText}>{i.content}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <h4 style={s.sectionTitle}>Timeline ({contact.interactions.length})</h4>
+          <InteractionTimeline interactions={contact.interactions} t={t} />
         </div>
       )}
     </div>
