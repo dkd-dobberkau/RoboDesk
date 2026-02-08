@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 const STORAGE_KEY = "robodesk-contacts";
 const TAGS_KEY = "robodesk-tags";
@@ -743,8 +743,39 @@ export default function RoboDesk() {
   const [contacts, setContacts] = useState([]);
   const [tags, setTags] = useState(DEFAULT_TAGS);
   const [theme, setTheme] = useState("light");
-  const [view, setView] = useState("dashboard");
-  const [selectedId, setSelectedId] = useState(null);
+  const parseHash = () => {
+    const hash = location.hash.slice(1);
+    if (!hash) return { view: "dashboard", id: null };
+    const [v, id] = hash.split("/");
+    const valid = ["dashboard", "timeline", "list", "add", "detail", "edit"];
+    if (!valid.includes(v)) return { view: "dashboard", id: null };
+    return { view: v, id: id || null };
+  };
+  const initial = useRef(parseHash());
+  const [view, setView] = useState(initial.current.view);
+  const [selectedId, setSelectedId] = useState(initial.current.id);
+  const skipHashSync = useRef(false);
+
+  const navigate = useCallback((newView, id) => {
+    const hash = id ? `${newView}/${id}` : newView;
+    if (location.hash === "#" + hash) return;
+    skipHashSync.current = true;
+    location.hash = hash;
+    setView(newView);
+    if (id !== undefined) setSelectedId(id);
+  }, []);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      if (skipHashSync.current) { skipHashSync.current = false; return; }
+      const { view: v, id } = parseHash();
+      setView(v);
+      setSelectedId(id);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [filterTag, setFilterTag] = useState("all");
   const [filterType, setFilterType] = useState("all");
@@ -763,6 +794,9 @@ export default function RoboDesk() {
   const i = (key, params) => i18n(lang, key, params);
 
   useEffect(() => {
+    if (!location.hash) {
+      history.replaceState(null, "", "#dashboard");
+    }
     async function load() {
       try {
         const res = await window.storage.get(STORAGE_KEY);
@@ -802,23 +836,23 @@ export default function RoboDesk() {
       const inInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
       if (e.key === "Escape") {
         if (showDataMenu) { setShowDataMenu(false); return; }
-        if (view === "detail" || view === "edit") { setView("list"); setSelectedId(null); return; }
-        if (view === "add") { setView("dashboard"); return; }
+        if (view === "detail" || view === "edit") { navigate("list", null); return; }
+        if (view === "add") { navigate("dashboard"); return; }
       }
       if (inInput) return;
-      if (e.key === "n") { setView("add"); setSelectedId(null); }
-      else if (e.key === "d") setView("dashboard");
-      else if (e.key === "t") setView("timeline");
-      else if (e.key === "k") setView("list");
+      if (e.key === "n") navigate("add", null);
+      else if (e.key === "d") navigate("dashboard");
+      else if (e.key === "t") navigate("timeline");
+      else if (e.key === "k") navigate("list");
       else if (e.key === "/") {
         e.preventDefault();
-        setView("list");
+        navigate("list");
         setTimeout(() => document.querySelector("[data-search]")?.focus(), 50);
       }
     };
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [view, showDataMenu]);
+  }, [view, showDataMenu, navigate]);
 
   const toggleTheme = async () => {
     const next = theme === "light" ? "dark" : "light";
@@ -856,23 +890,22 @@ export default function RoboDesk() {
       saveContacts(data);
       saveTags([...allTags]);
       setShowDataMenu(false);
-      setView("dashboard");
+      navigate("dashboard");
     } catch (e) {}
   };
 
   const clearAllData = async () => {
     saveContacts([]);
     saveTags([...DEFAULT_TAGS]);
-    setSelectedId(null);
     setConfirmClear(false);
     setShowDataMenu(false);
-    setView("dashboard");
+    navigate("dashboard", null);
   };
 
   const addContact = (contact) => {
     const nc = { ...contact, id: generateId(), createdAt: new Date().toISOString(), interactions: [] };
     saveContacts([...contacts, nc]);
-    setView("list");
+    navigate("list");
   };
 
   const updateContact = (updated) => {
@@ -881,8 +914,7 @@ export default function RoboDesk() {
 
   const deleteContact = (id) => {
     saveContacts(contacts.filter(c => c.id !== id));
-    setView("list");
-    setSelectedId(null);
+    navigate("list", null);
   };
 
   const addInteraction = (contactId, interaction) => {
@@ -1041,16 +1073,16 @@ export default function RoboDesk() {
             <span style={s.logoIcon}>⚡</span> RoboDesk
           </h1>
           <div style={s.navTabs}>
-            <button style={{...s.navTab, ...(view === "dashboard" ? s.navTabActive : {})}} onClick={() => setView("dashboard")}>{i("nav.dashboard")}</button>
-            <button style={{...s.navTab, ...(view === "timeline" ? s.navTabActive : {})}} onClick={() => setView("timeline")}>{i("nav.timeline")}</button>
-            <button style={{...s.navTab, ...(view === "list" || view === "detail" || view === "edit" ? s.navTabActive : {})}} onClick={() => setView("list")}>{i("nav.contacts")}</button>
+            <button style={{...s.navTab, ...(view === "dashboard" ? s.navTabActive : {})}} onClick={() => navigate("dashboard")}>{i("nav.dashboard")}</button>
+            <button style={{...s.navTab, ...(view === "timeline" ? s.navTabActive : {})}} onClick={() => navigate("timeline")}>{i("nav.timeline")}</button>
+            <button style={{...s.navTab, ...(view === "list" || view === "detail" || view === "edit" ? s.navTabActive : {})}} onClick={() => navigate("list")}>{i("nav.contacts")}</button>
           </div>
         </div>
         <div style={s.headerRight} data-header-right>
           <div style={s.statsRow}>
             <span style={s.stat}>{i("header.contacts_count", { n: contacts.length })}</span>
             {dueCount > 0 && (
-              <span style={{...s.stat, ...s.statAlert}} onClick={() => { setShowFollowUpOnly(!showFollowUpOnly); setView("list"); }}>
+              <span style={{...s.stat, ...s.statAlert}} onClick={() => { setShowFollowUpOnly(!showFollowUpOnly); navigate("list"); }}>
                 {overdueCount > 0 ? i("header.overdue", { n: overdueCount }) : i("header.due", { n: dueCount })}
               </span>
             )}
@@ -1085,7 +1117,7 @@ export default function RoboDesk() {
           <button style={s.themeToggle} onClick={toggleTheme} title={i("header.toggle_theme")}>
             {theme === "light" ? "🌙" : "☀️"}
           </button>
-          <button style={s.addBtn} onClick={() => { setView("add"); setSelectedId(null); }}>{i("header.new_contact")}</button>
+          <button style={s.addBtn} onClick={() => navigate("add", null)}>{i("header.new_contact")}</button>
         </div>
       </header>
 
@@ -1098,7 +1130,7 @@ export default function RoboDesk() {
       {view === "dashboard" && (
         <Dashboard
           contacts={contacts}
-          onOpenContact={(id) => { setSelectedId(id); setView("detail"); }}
+          onOpenContact={(id) => navigate("detail", id)}
           onLoadDemo={loadDemo}
           s={s} t={t} i={i} lang={lang}
         />
@@ -1107,25 +1139,25 @@ export default function RoboDesk() {
       {view === "timeline" && (
         <GlobalTimeline
           contacts={contacts}
-          onOpenContact={(id) => { setSelectedId(id); setView("detail"); }}
+          onOpenContact={(id) => navigate("detail", id)}
           s={s} t={t} i={i} lang={lang}
         />
       )}
 
       {view === "add" && (
-        <ContactForm onSave={addContact} onCancel={() => setView("dashboard")} tags={tags} onAddTag={(tag) => saveTags([...tags, tag])} s={s} t={t} i={i} lang={lang} />
+        <ContactForm onSave={addContact} onCancel={() => navigate("dashboard")} tags={tags} onAddTag={(tag) => saveTags([...tags, tag])} s={s} t={t} i={i} lang={lang} />
       )}
 
       {view === "edit" && selectedContact && (
-        <ContactForm contact={selectedContact} onSave={(c) => { updateContact(c); setView("detail"); }} onCancel={() => setView("detail")} tags={tags} onAddTag={(tag) => saveTags([...tags, tag])} s={s} t={t} i={i} lang={lang} />
+        <ContactForm contact={selectedContact} onSave={(c) => { updateContact(c); navigate("detail", selectedContact.id); }} onCancel={() => navigate("detail", selectedContact.id)} tags={tags} onAddTag={(tag) => saveTags([...tags, tag])} s={s} t={t} i={i} lang={lang} />
       )}
 
       {view === "detail" && selectedContact && (
         <ContactDetail
           contact={selectedContact}
-          onEdit={() => setView("edit")}
+          onEdit={() => navigate("edit", selectedContact.id)}
           onDelete={deleteContact}
-          onBack={() => { setView("list"); setSelectedId(null); }}
+          onBack={() => navigate("list", null)}
           onAddInteraction={(inter) => addInteraction(selectedContact.id, inter)}
           onUpdate={updateContact}
           s={s} t={t} i={i} lang={lang}
@@ -1213,7 +1245,7 @@ export default function RoboDesk() {
                   selected={selectedIds.has(c.id)}
                   onClick={() => {
                     if (bulkMode) toggleBulkSelect(c.id);
-                    else { setSelectedId(c.id); setView("detail"); }
+                    else navigate("detail", c.id);
                   }}
                 />
               ))}
