@@ -409,6 +409,40 @@ export default function RoboDesk() {
     load();
   }, []);
 
+  // Close data menu on outside click
+  useEffect(() => {
+    if (!showDataMenu) return;
+    const handleClick = (e) => {
+      if (!e.target.closest("[data-menu]")) setShowDataMenu(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showDataMenu]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKey = (e) => {
+      const tag = e.target.tagName;
+      const inInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+      if (e.key === "Escape") {
+        if (showDataMenu) { setShowDataMenu(false); return; }
+        if (view === "detail" || view === "edit") { setView("list"); setSelectedId(null); return; }
+        if (view === "add") { setView("dashboard"); return; }
+      }
+      if (inInput) return;
+      if (e.key === "n") { setView("add"); setSelectedId(null); }
+      else if (e.key === "d") setView("dashboard");
+      else if (e.key === "k") setView("list");
+      else if (e.key === "/") {
+        e.preventDefault();
+        setView("list");
+        setTimeout(() => document.querySelector("[data-search]")?.focus(), 50);
+      }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [view, showDataMenu]);
+
   const toggleTheme = async () => {
     const next = theme === "light" ? "dark" : "light";
     setTheme(next);
@@ -524,10 +558,22 @@ export default function RoboDesk() {
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: ${t.scrollThumb}; border-radius: 3px; }
+        [data-menu-item]:hover { background: ${t.accentLight} !important; }
+        @media (max-width: 640px) {
+          header { flex-wrap: wrap !important; gap: 8px !important; padding: 12px 16px !important; }
+          [data-header-left] { width: 100% !important; }
+          [data-header-right] { width: 100% !important; justify-content: flex-end !important; }
+          [data-toolbar] { padding: 10px 16px !important; }
+          [data-contact-grid] { grid-template-columns: 1fr !important; padding: 12px 16px !important; }
+          [data-detail-grid] { grid-template-columns: 1fr !important; }
+          [data-form-grid] { grid-template-columns: 1fr !important; }
+          [data-stats-grid] { grid-template-columns: 1fr 1fr !important; }
+          [data-dashboard] { padding: 12px 16px !important; }
+        }
       `}</style>
 
       <header style={s.header}>
-        <div style={s.headerLeft}>
+        <div style={s.headerLeft} data-header-left>
           <h1 style={s.logo}>
             <span style={s.logoIcon}>⚡</span> RoboDesk
           </h1>
@@ -536,7 +582,7 @@ export default function RoboDesk() {
             <button style={{...s.navTab, ...(view === "list" || view === "detail" || view === "edit" ? s.navTabActive : {})}} onClick={() => setView("list")}>Kontakte</button>
           </div>
         </div>
-        <div style={s.headerRight}>
+        <div style={s.headerRight} data-header-right>
           <div style={s.statsRow}>
             <span style={s.stat}>{contacts.length} Kontakte</span>
             {dueCount > 0 && (
@@ -545,15 +591,15 @@ export default function RoboDesk() {
               </span>
             )}
           </div>
-          <div style={{ position: "relative" }}>
+          <div style={{ position: "relative" }} data-menu>
             <button style={s.themeToggle} onClick={() => setShowDataMenu(!showDataMenu)} title="Daten">📁</button>
             {showDataMenu && (
               <div style={s.dataMenu}>
-                <button style={s.dataMenuItem} onClick={() => { exportCsv(contacts); setShowDataMenu(false); }}>CSV exportieren</button>
-                <button style={s.dataMenuItem} onClick={() => handleImportFile(".csv", importCsv)}>CSV importieren</button>
+                <button style={s.dataMenuItem} data-menu-item onClick={() => { exportCsv(contacts); setShowDataMenu(false); }}>CSV exportieren</button>
+                <button style={s.dataMenuItem} data-menu-item onClick={() => handleImportFile(".csv", importCsv)}>CSV importieren</button>
                 <div style={s.dataMenuDivider} />
-                <button style={s.dataMenuItem} onClick={() => { exportVcf(contacts); setShowDataMenu(false); }}>VCF exportieren</button>
-                <button style={s.dataMenuItem} onClick={() => handleImportFile(".vcf", importVcf)}>VCF importieren</button>
+                <button style={s.dataMenuItem} data-menu-item onClick={() => { exportVcf(contacts); setShowDataMenu(false); }}>VCF exportieren</button>
+                <button style={s.dataMenuItem} data-menu-item onClick={() => handleImportFile(".vcf", importVcf)}>VCF importieren</button>
               </div>
             )}
           </div>
@@ -600,12 +646,13 @@ export default function RoboDesk() {
 
       {view === "list" && (
         <>
-          <div style={s.toolbar}>
+          <div style={s.toolbar} data-toolbar>
             <input
               style={s.searchInput}
               placeholder="Suchen nach Name, Firma, Tag..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
+              data-search
             />
             <select style={s.filterSelect} value={filterTag} onChange={e => setFilterTag(e.target.value)}>
               <option value="all">Alle Tags</option>
@@ -633,7 +680,7 @@ export default function RoboDesk() {
               <p style={s.emptyText}>{contacts.length === 0 ? "Noch keine Kontakte. Starte mit dem ersten!" : "Keine Kontakte gefunden."}</p>
             </div>
           ) : (
-            <div style={s.contactGrid}>
+            <div style={s.contactGrid} data-contact-grid>
               {filtered.map(c => (
                 <ContactCard key={c.id} contact={c} onClick={() => { setSelectedId(c.id); setView("detail"); }} s={s} t={t} />
               ))}
@@ -672,7 +719,7 @@ function Dashboard({ contacts, onOpenContact, s, t }) {
   const nudgeColors = { overdue: "#dc2626", due: "#ea580c", neglected: t.accentPrimary, untouched: t.accentPrimary, "no-followup": t.accentPrimary, momentum: "#16a34a" };
 
   return (
-    <div style={s.dashboardWrap}>
+    <div style={s.dashboardWrap} data-dashboard>
       {nudges.length > 0 && (
         <div style={s.dashSection}>
           <h3 style={s.dashTitle}>Handlungsempfehlungen</h3>
@@ -698,7 +745,7 @@ function Dashboard({ contacts, onOpenContact, s, t }) {
 
       <div style={s.dashSection}>
         <h3 style={s.dashTitle}>Übersicht</h3>
-        <div style={s.statsGrid}>
+        <div style={s.statsGrid} data-stats-grid>
           <div style={s.statCard}>
             <span style={s.statNumber}>{contacts.length}</span>
             <span style={s.statLabel}>Kontakte gesamt</span>
@@ -835,7 +882,7 @@ function ContactDetail({ contact, onEdit, onDelete, onBack, onAddInteraction, on
         </div>
       )}
 
-      <div style={s.detailGrid}>
+      <div style={s.detailGrid} data-detail-grid>
         <div style={s.detailSection}>
           <h4 style={s.sectionTitle}>Kontaktdaten</h4>
           <div style={s.fieldGroup}>
@@ -949,7 +996,7 @@ function ContactForm({ contact, onSave, onCancel, tags, onAddTag, s, t }) {
       <div style={s.formCard}>
         <h2 style={s.formTitle}>{contact ? "Kontakt bearbeiten" : "Neuer Kontakt"}</h2>
 
-        <div style={s.formGrid}>
+        <div style={s.formGrid} data-form-grid>
           <div style={s.formGroup}>
             <label style={s.label}>Name *</label>
             <input style={s.input} value={form.name} onChange={e => set("name", e.target.value)} placeholder="Vor- und Nachname" />
