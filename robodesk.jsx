@@ -176,7 +176,7 @@ function unescapeVcf(val) {
 }
 
 function parseVcards(text) {
-  const unfoldedText = text.replace(/\r\n[ \t]/g, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const unfoldedText = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n[ \t]/g, "");
   const blocks = unfoldedText.split(/(?=BEGIN:VCARD)/i).filter(b => /BEGIN:VCARD/i.test(b));
   return blocks.map(block => {
     const contact = { tags: [] };
