@@ -22,6 +22,9 @@ const translations = {
     "header.contacts_count": "{n} Kontakte", "header.overdue": "{n} überfällig", "header.due": "{n} fällig",
     "header.data": "Daten", "header.csv_export": "CSV exportieren", "header.csv_import": "CSV importieren",
     "header.vcf_export": "VCF exportieren", "header.vcf_import": "VCF importieren",
+    "header.load_demo": "Demodaten laden", "header.clear_data": "Alle Daten löschen",
+    "header.confirm_clear": "Alle Kontakte und Daten löschen?", "header.confirm_clear_yes": "Ja, alles löschen",
+    "empty.try_demo": "Oder Demodaten laden",
     "header.toggle_theme": "Theme wechseln", "header.new_contact": "+ Neuer Kontakt",
     "import.result": "{imported} Kontakte importiert", "import.skipped": ", {skipped} Duplikate übersprungen",
     "toolbar.search": "Suchen nach Name, Firma, Tag...", "toolbar.all_tags": "Alle Tags",
@@ -89,6 +92,9 @@ const translations = {
     "header.contacts_count": "{n} Contacts", "header.overdue": "{n} overdue", "header.due": "{n} due",
     "header.data": "Data", "header.csv_export": "Export CSV", "header.csv_import": "Import CSV",
     "header.vcf_export": "Export VCF", "header.vcf_import": "Import VCF",
+    "header.load_demo": "Load demo data", "header.clear_data": "Clear all data",
+    "header.confirm_clear": "Delete all contacts and data?", "header.confirm_clear_yes": "Yes, clear everything",
+    "empty.try_demo": "Or load demo data",
     "header.toggle_theme": "Change theme", "header.new_contact": "+ New Contact",
     "import.result": "{imported} contacts imported", "import.skipped": ", {skipped} duplicates skipped",
     "toolbar.search": "Search by name, company, tag...", "toolbar.all_tags": "All Tags",
@@ -156,6 +162,9 @@ const translations = {
     "header.contacts_count": "{n} Kontakter", "header.overdue": "{n} forsinket", "header.due": "{n} forfalden",
     "header.data": "Data", "header.csv_export": "Eksporter CSV", "header.csv_import": "Importer CSV",
     "header.vcf_export": "Eksporter VCF", "header.vcf_import": "Importer VCF",
+    "header.load_demo": "Indlæs demodata", "header.clear_data": "Slet alle data",
+    "header.confirm_clear": "Slet alle kontakter og data?", "header.confirm_clear_yes": "Ja, slet alt",
+    "empty.try_demo": "Eller indlæs demodata",
     "header.toggle_theme": "Skift tema", "header.new_contact": "+ Ny kontakt",
     "import.result": "{imported} kontakter importeret", "import.skipped": ", {skipped} duplikater sprunget over",
     "toolbar.search": "Søg efter navn, firma, tag...", "toolbar.all_tags": "Alle tags",
@@ -223,6 +232,9 @@ const translations = {
     "header.contacts_count": "{n} Contacts", "header.overdue": "{n} en retard", "header.due": "{n} à échéance",
     "header.data": "Données", "header.csv_export": "Exporter CSV", "header.csv_import": "Importer CSV",
     "header.vcf_export": "Exporter VCF", "header.vcf_import": "Importer VCF",
+    "header.load_demo": "Charger les données démo", "header.clear_data": "Supprimer toutes les données",
+    "header.confirm_clear": "Supprimer tous les contacts et données ?", "header.confirm_clear_yes": "Oui, tout supprimer",
+    "empty.try_demo": "Ou charger les données démo",
     "header.toggle_theme": "Changer de thème", "header.new_contact": "+ Nouveau contact",
     "import.result": "{imported} contacts importés", "import.skipped": ", {skipped} doublons ignorés",
     "toolbar.search": "Rechercher par nom, entreprise, tag...", "toolbar.all_tags": "Tous les tags",
@@ -833,6 +845,30 @@ export default function RoboDesk() {
     try { await window.storage.set(TAGS_KEY, JSON.stringify(newTags)); } catch (e) {}
   }, []);
 
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  const loadDemo = async () => {
+    try {
+      const r = await fetch("demo-data.json");
+      const data = await r.json();
+      const allTags = new Set(DEFAULT_TAGS);
+      data.forEach(c => (c.tags || []).forEach(t => allTags.add(t)));
+      saveContacts(data);
+      saveTags([...allTags]);
+      setShowDataMenu(false);
+      setView("dashboard");
+    } catch (e) {}
+  };
+
+  const clearAllData = async () => {
+    saveContacts([]);
+    saveTags([...DEFAULT_TAGS]);
+    setSelectedId(null);
+    setConfirmClear(false);
+    setShowDataMenu(false);
+    setView("dashboard");
+  };
+
   const addContact = (contact) => {
     const nc = { ...contact, id: generateId(), createdAt: new Date().toISOString(), interactions: [] };
     saveContacts([...contacts, nc]);
@@ -1028,6 +1064,18 @@ export default function RoboDesk() {
                 <div style={s.dataMenuDivider} />
                 <button style={s.dataMenuItem} data-menu-item onClick={() => { exportVcf(contacts); setShowDataMenu(false); }}>{i("header.vcf_export")}</button>
                 <button style={s.dataMenuItem} data-menu-item onClick={() => handleImportFile(".vcf", importVcf)}>{i("header.vcf_import")}</button>
+                <div style={s.dataMenuDivider} />
+                <button style={s.dataMenuItem} data-menu-item onClick={loadDemo}>🎭 {i("header.load_demo")}</button>
+                {contacts.length > 0 && !confirmClear && (
+                  <button style={{...s.dataMenuItem, color: "#dc2626"}} data-menu-item onClick={() => setConfirmClear(true)}>🗑 {i("header.clear_data")}</button>
+                )}
+                {confirmClear && (
+                  <div style={{ padding: "8px 12px", display: "flex", gap: 6, alignItems: "center" }}>
+                    <span style={{ fontSize: 12, color: "#dc2626" }}>{i("header.confirm_clear")}</span>
+                    <button style={{...s.dataMenuItem, color: "#dc2626", fontWeight: 600, padding: "4px 8px"}} data-menu-item onClick={clearAllData}>{i("header.confirm_clear_yes")}</button>
+                    <button style={{...s.dataMenuItem, padding: "4px 8px"}} data-menu-item onClick={() => setConfirmClear(false)}>{i("detail.cancel")}</button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1051,6 +1099,7 @@ export default function RoboDesk() {
         <Dashboard
           contacts={contacts}
           onOpenContact={(id) => { setSelectedId(id); setView("detail"); }}
+          onLoadDemo={loadDemo}
           s={s} t={t} i={i} lang={lang}
         />
       )}
@@ -1299,7 +1348,7 @@ function InteractionTimeline({ interactions, t, lang }) {
 }
 
 // ── DASHBOARD ──
-function Dashboard({ contacts, onOpenContact, s, t, i, lang }) {
+function Dashboard({ contacts, onOpenContact, onLoadDemo, s, t, i, lang }) {
   const nudges = generateNudges(contacts);
   const [showAllNudges, setShowAllNudges] = useState(false);
   const displayNudges = showAllNudges ? nudges : nudges.slice(0, 5);
@@ -1431,6 +1480,7 @@ function Dashboard({ contacts, onOpenContact, s, t, i, lang }) {
         <div style={s.emptyState}>
           <div style={s.emptyIcon}>📇</div>
           <p style={s.emptyText}>{i("empty.welcome")}</p>
+          <button style={{...s.filterToggle, marginTop: 12, padding: "10px 20px"}} onClick={onLoadDemo}>🎭 {i("empty.try_demo")}</button>
         </div>
       )}
     </div>
