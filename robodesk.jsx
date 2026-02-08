@@ -428,6 +428,10 @@ export default function RoboDesk() {
   const [loading, setLoading] = useState(true);
   const [showDataMenu, setShowDataMenu] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showBulkTag, setShowBulkTag] = useState(false);
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
 
   const t = themes[theme];
 
@@ -549,6 +553,58 @@ export default function RoboDesk() {
     };
     input.click();
     setShowDataMenu(false);
+  };
+
+  const toggleBulkSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const bulkSelectAll = () => {
+    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filtered.map(c => c.id)));
+  };
+
+  const bulkAddTag = (tag) => {
+    const updated = contacts.map(c => {
+      if (!selectedIds.has(c.id)) return c;
+      const tags = (c.tags || []).includes(tag) ? c.tags : [...(c.tags || []), tag];
+      return { ...c, tags };
+    });
+    saveContacts(updated);
+    setShowBulkTag(false);
+  };
+
+  const bulkRemoveTag = (tag) => {
+    const updated = contacts.map(c => {
+      if (!selectedIds.has(c.id)) return c;
+      return { ...c, tags: (c.tags || []).filter(t => t !== tag) };
+    });
+    saveContacts(updated);
+    setShowBulkTag(false);
+  };
+
+  const bulkDelete = () => {
+    saveContacts(contacts.filter(c => !selectedIds.has(c.id)));
+    setSelectedIds(new Set());
+    setBulkMode(false);
+    setShowBulkDelete(false);
+  };
+
+  const bulkExport = (format) => {
+    const selected = contacts.filter(c => selectedIds.has(c.id));
+    if (format === "csv") exportCsv(selected);
+    else exportVcf(selected);
+  };
+
+  const exitBulkMode = () => {
+    setBulkMode(false);
+    setSelectedIds(new Set());
+    setShowBulkTag(false);
+    setShowBulkDelete(false);
   };
 
   const filtered = contacts.filter(c => {
@@ -688,34 +744,70 @@ export default function RoboDesk() {
 
       {view === "list" && (
         <>
-          <div style={s.toolbar} data-toolbar>
-            <input
-              style={s.searchInput}
-              placeholder="Suchen nach Name, Firma, Tag..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              data-search
-            />
-            <select style={s.filterSelect} value={filterTag} onChange={e => setFilterTag(e.target.value)}>
-              <option value="all">Alle Tags</option>
-              {tags.map(tag => <option key={tag} value={tag}>{tag}</option>)}
-            </select>
-            <select style={s.filterSelect} value={filterType} onChange={e => setFilterType(e.target.value)}>
-              <option value="all">Alle Typen</option>
-              {RELATIONSHIP_TYPES.map(rt => <option key={rt} value={rt}>{rt}</option>)}
-            </select>
-            <select style={s.filterSelect} value={sortBy} onChange={e => setSortBy(e.target.value)}>
-              <option value="name">Name A–Z</option>
-              <option value="lastContact">Letzter Kontakt</option>
-              <option value="followUp">Follow-Up</option>
-              <option value="recent">Neueste zuerst</option>
-              <option value="strength">Beziehungsstärke</option>
-            </select>
-            <button
-              style={{...s.filterToggle, ...(showFollowUpOnly ? s.filterToggleActive : {})}}
-              onClick={() => setShowFollowUpOnly(!showFollowUpOnly)}
-            >⏰ Fällig</button>
-          </div>
+          {bulkMode ? (
+            <div style={s.bulkToolbar} data-toolbar>
+              <span style={s.bulkCount}>{selectedIds.size} ausgewählt</span>
+              <button style={s.bulkBtn} onClick={bulkSelectAll}>
+                {selectedIds.size === filtered.length ? "Auswahl aufheben" : "Alle auswählen"}
+              </button>
+              <div style={{ position: "relative" }}>
+                <button style={s.bulkBtn} onClick={() => setShowBulkTag(!showBulkTag)}>Tags setzen</button>
+                {showBulkTag && (
+                  <div style={s.dataMenu}>
+                    {tags.map(tag => (
+                      <button key={tag} style={s.dataMenuItem} data-menu-item onClick={() => bulkAddTag(tag)}>+ {tag}</button>
+                    ))}
+                    <div style={s.dataMenuDivider} />
+                    {tags.map(tag => (
+                      <button key={"rm-" + tag} style={{...s.dataMenuItem, color: "#dc2626"}} data-menu-item onClick={() => bulkRemoveTag(tag)}>− {tag}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button style={s.bulkBtn} onClick={() => bulkExport("csv")} disabled={selectedIds.size === 0}>CSV</button>
+              <button style={s.bulkBtn} onClick={() => bulkExport("vcf")} disabled={selectedIds.size === 0}>VCF</button>
+              <button style={{...s.bulkBtn, color: "#dc2626"}} onClick={() => setShowBulkDelete(true)} disabled={selectedIds.size === 0}>Löschen</button>
+              <button style={s.bulkBtn} onClick={exitBulkMode}>Abbrechen</button>
+            </div>
+          ) : (
+            <div style={s.toolbar} data-toolbar>
+              <input
+                style={s.searchInput}
+                placeholder="Suchen nach Name, Firma, Tag..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                data-search
+              />
+              <select style={s.filterSelect} value={filterTag} onChange={e => setFilterTag(e.target.value)}>
+                <option value="all">Alle Tags</option>
+                {tags.map(tag => <option key={tag} value={tag}>{tag}</option>)}
+              </select>
+              <select style={s.filterSelect} value={filterType} onChange={e => setFilterType(e.target.value)}>
+                <option value="all">Alle Typen</option>
+                {RELATIONSHIP_TYPES.map(rt => <option key={rt} value={rt}>{rt}</option>)}
+              </select>
+              <select style={s.filterSelect} value={sortBy} onChange={e => setSortBy(e.target.value)}>
+                <option value="name">Name A–Z</option>
+                <option value="lastContact">Letzter Kontakt</option>
+                <option value="followUp">Follow-Up</option>
+                <option value="recent">Neueste zuerst</option>
+                <option value="strength">Beziehungsstärke</option>
+              </select>
+              <button
+                style={{...s.filterToggle, ...(showFollowUpOnly ? s.filterToggleActive : {})}}
+                onClick={() => setShowFollowUpOnly(!showFollowUpOnly)}
+              >⏰ Fällig</button>
+              <button style={s.filterToggle} onClick={() => setBulkMode(true)}>☑ Auswählen</button>
+            </div>
+          )}
+
+          {showBulkDelete && (
+            <div style={s.importToast}>
+              <span>{selectedIds.size} Kontakte löschen? </span>
+              <button style={{...s.bulkBtn, color: "#fff", background: "#dc2626", marginLeft: 8}} onClick={bulkDelete}>Ja, löschen</button>
+              <button style={{...s.bulkBtn, marginLeft: 4}} onClick={() => setShowBulkDelete(false)}>Abbrechen</button>
+            </div>
+          )}
 
           {filtered.length === 0 ? (
             <div style={s.emptyState}>
@@ -725,7 +817,15 @@ export default function RoboDesk() {
           ) : (
             <div style={s.contactGrid} data-contact-grid>
               {filtered.map(c => (
-                <ContactCard key={c.id} contact={c} onClick={() => { setSelectedId(c.id); setView("detail"); }} s={s} t={t} />
+                <ContactCard
+                  key={c.id} contact={c} s={s} t={t}
+                  bulkMode={bulkMode}
+                  selected={selectedIds.has(c.id)}
+                  onClick={() => {
+                    if (bulkMode) toggleBulkSelect(c.id);
+                    else { setSelectedId(c.id); setView("detail"); }
+                  }}
+                />
               ))}
             </div>
           )}
@@ -856,7 +956,7 @@ function Dashboard({ contacts, onOpenContact, s, t }) {
 }
 
 // ── CONTACT CARD ──
-function ContactCard({ contact, onClick, s, t }) {
+function ContactCard({ contact, onClick, s, t, bulkMode, selected }) {
   const urgency = getFollowUpUrgency(contact);
   const lastDays = daysAgo(contact.lastContact);
   const initials = (contact.name || "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
@@ -865,8 +965,15 @@ function ContactCard({ contact, onClick, s, t }) {
   const strengthColor = strength.color || t.accentPrimary;
 
   return (
-    <div style={s.card} onClick={onClick}>
+    <div style={{...s.card, ...(selected ? { borderColor: t.accentPrimary, boxShadow: `0 0 0 2px ${t.accentPrimary}33` } : {})}} onClick={onClick}>
       {urgency !== "none" && <div style={{...s.cardUrgencyBar, backgroundColor: urgencyColors[urgency]}} />}
+      {bulkMode && (
+        <div style={s.bulkCheckbox}>
+          <div style={{...s.checkbox, ...(selected ? s.checkboxActive : {})}}>
+            {selected && "✓"}
+          </div>
+        </div>
+      )}
       <div style={s.cardTop}>
         <div style={{...s.avatar, backgroundColor: stringToColor(contact.name || "")}}>{initials}</div>
         <div style={s.cardInfo}>
@@ -1446,6 +1553,28 @@ function makeStyles(t) {
     activityText: { fontSize: 13, color: t.textPrimary },
     activityContent: { fontSize: 12, color: t.textMuted, margin: "2px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
     activityTime: { fontSize: 11, color: t.textMuted, flexShrink: 0, marginTop: 2 },
+
+    // Bulk mode
+    bulkToolbar: {
+      display: "flex", gap: 8, padding: "10px 28px", alignItems: "center",
+      flexWrap: "wrap", borderBottom: `1px solid ${t.headerBorder}`,
+      background: t.accentLight,
+    },
+    bulkCount: { fontSize: 13, fontWeight: 600, color: t.accentPrimary, marginRight: 8 },
+    bulkBtn: {
+      padding: "6px 12px", borderRadius: 6, border: `1px solid ${t.inputBorder}`,
+      background: t.inputBg, color: t.textSecondary, fontSize: 12, cursor: "pointer",
+      fontFamily: "inherit",
+    },
+    bulkCheckbox: { position: "absolute", top: 8, right: 8, zIndex: 2 },
+    checkbox: {
+      width: 20, height: 20, borderRadius: 4, border: `2px solid ${t.inputBorder}`,
+      background: t.inputBg, display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: 12, fontWeight: 700, color: "#fff",
+    },
+    checkboxActive: {
+      background: t.accentPrimary, borderColor: t.accentPrimary,
+    },
 
     // Strength bar
     strengthBar: {
