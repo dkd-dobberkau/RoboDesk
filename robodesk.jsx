@@ -16,7 +16,9 @@ const RELATIONSHIP_TYPES = ["Professional", "Personal", "Community", "Client", "
 // ── TRANSLATIONS ──
 const translations = {
   de: {
-    "nav.dashboard": "Dashboard", "nav.contacts": "Kontakte",
+    "nav.dashboard": "Dashboard", "nav.contacts": "Kontakte", "nav.timeline": "Timeline",
+    "timeline.title": "Timeline", "timeline.all_types": "Alle Typen",
+    "timeline.empty": "Noch keine Interaktionen.", "timeline.show_more": "Mehr anzeigen",
     "header.contacts_count": "{n} Kontakte", "header.overdue": "{n} überfällig", "header.due": "{n} fällig",
     "header.data": "Daten", "header.csv_export": "CSV exportieren", "header.csv_import": "CSV importieren",
     "header.vcf_export": "VCF exportieren", "header.vcf_import": "VCF importieren",
@@ -81,7 +83,9 @@ const translations = {
     "detail.birthday": "Geburtstag", "detail.age": "{n} Jahre",
   },
   en: {
-    "nav.dashboard": "Dashboard", "nav.contacts": "Contacts",
+    "nav.dashboard": "Dashboard", "nav.contacts": "Contacts", "nav.timeline": "Timeline",
+    "timeline.title": "Timeline", "timeline.all_types": "All Types",
+    "timeline.empty": "No interactions yet.", "timeline.show_more": "Show more",
     "header.contacts_count": "{n} Contacts", "header.overdue": "{n} overdue", "header.due": "{n} due",
     "header.data": "Data", "header.csv_export": "Export CSV", "header.csv_import": "Import CSV",
     "header.vcf_export": "Export VCF", "header.vcf_import": "Import VCF",
@@ -146,7 +150,9 @@ const translations = {
     "detail.birthday": "Birthday", "detail.age": "{n} years",
   },
   da: {
-    "nav.dashboard": "Dashboard", "nav.contacts": "Kontakter",
+    "nav.dashboard": "Dashboard", "nav.contacts": "Kontakter", "nav.timeline": "Tidslinje",
+    "timeline.title": "Tidslinje", "timeline.all_types": "Alle typer",
+    "timeline.empty": "Ingen interaktioner endnu.", "timeline.show_more": "Vis mere",
     "header.contacts_count": "{n} Kontakter", "header.overdue": "{n} forsinket", "header.due": "{n} forfalden",
     "header.data": "Data", "header.csv_export": "Eksporter CSV", "header.csv_import": "Importer CSV",
     "header.vcf_export": "Eksporter VCF", "header.vcf_import": "Importer VCF",
@@ -211,7 +217,9 @@ const translations = {
     "detail.birthday": "Fødselsdag", "detail.age": "{n} år",
   },
   fr: {
-    "nav.dashboard": "Tableau de bord", "nav.contacts": "Contacts",
+    "nav.dashboard": "Tableau de bord", "nav.contacts": "Contacts", "nav.timeline": "Chronologie",
+    "timeline.title": "Chronologie", "timeline.all_types": "Tous les types",
+    "timeline.empty": "Pas encore d'interactions.", "timeline.show_more": "Afficher plus",
     "header.contacts_count": "{n} Contacts", "header.overdue": "{n} en retard", "header.due": "{n} à échéance",
     "header.data": "Données", "header.csv_export": "Exporter CSV", "header.csv_import": "Importer CSV",
     "header.vcf_export": "Exporter VCF", "header.vcf_import": "Importer VCF",
@@ -788,6 +796,7 @@ export default function RoboDesk() {
       if (inInput) return;
       if (e.key === "n") { setView("add"); setSelectedId(null); }
       else if (e.key === "d") setView("dashboard");
+      else if (e.key === "t") setView("timeline");
       else if (e.key === "k") setView("list");
       else if (e.key === "/") {
         e.preventDefault();
@@ -997,6 +1006,7 @@ export default function RoboDesk() {
           </h1>
           <div style={s.navTabs}>
             <button style={{...s.navTab, ...(view === "dashboard" ? s.navTabActive : {})}} onClick={() => setView("dashboard")}>{i("nav.dashboard")}</button>
+            <button style={{...s.navTab, ...(view === "timeline" ? s.navTabActive : {})}} onClick={() => setView("timeline")}>{i("nav.timeline")}</button>
             <button style={{...s.navTab, ...(view === "list" || view === "detail" || view === "edit" ? s.navTabActive : {})}} onClick={() => setView("list")}>{i("nav.contacts")}</button>
           </div>
         </div>
@@ -1039,6 +1049,14 @@ export default function RoboDesk() {
 
       {view === "dashboard" && (
         <Dashboard
+          contacts={contacts}
+          onOpenContact={(id) => { setSelectedId(id); setView("detail"); }}
+          s={s} t={t} i={i} lang={lang}
+        />
+      )}
+
+      {view === "timeline" && (
+        <GlobalTimeline
           contacts={contacts}
           onOpenContact={(id) => { setSelectedId(id); setView("detail"); }}
           s={s} t={t} i={i} lang={lang}
@@ -1722,6 +1740,101 @@ function ContactForm({ contact, onSave, onCancel, tags, onAddTag, s, t, i, lang 
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── GLOBAL TIMELINE ──
+function GlobalTimeline({ contacts, onOpenContact, s, t, i, lang }) {
+  const [filterType, setFilterType] = useState("all");
+  const [showCount, setShowCount] = useState(30);
+
+  const allInteractions = contacts.flatMap(c =>
+    (c.interactions || []).map(x => ({ ...x, contactName: c.name, contactId: c.id }))
+  );
+  const filtered = filterType === "all"
+    ? allInteractions
+    : allInteractions.filter(x => x.type === filterType);
+  const sorted = [...filtered].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const visible = sorted.slice(0, showCount);
+
+  const typeIcons = { note: "\u{1f4dd}", call: "\u{1f4de}", meeting: "\u{1f91d}", email: "\u2709\ufe0f", event: "\u{1f3ea}", idea: "\u{1f4a1}" };
+  const types = ["all", "note", "call", "meeting", "email", "event", "idea"];
+
+  // Group visible entries by date
+  const groups = [];
+  let currentLabel = null;
+  visible.forEach(entry => {
+    const d = daysAgo(entry.date);
+    const label = d === 0 ? i("time.today") : d === 1 ? i("time.yesterday") : d !== null ? i("time.days_ago", { n: d }) : formatDate(entry.date, lang);
+    if (label !== currentLabel) {
+      groups.push({ label, entries: [] });
+      currentLabel = label;
+    }
+    groups[groups.length - 1].entries.push(entry);
+  });
+
+  return (
+    <div style={s.dashboardWrap}>
+      <h2 style={{ fontSize: 20, fontWeight: 700, color: t.textPrimary, margin: "0 0 16px" }}>{i("timeline.title")}</h2>
+
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 20 }}>
+        {types.map(tp => (
+          <button
+            key={tp}
+            style={{...s.filterToggle, ...(filterType === tp ? s.filterToggleActive : {})}}
+            onClick={() => { setFilterType(tp); setShowCount(30); }}
+          >
+            {tp === "all" ? i("timeline.all_types") : `${typeIcons[tp] || ""} ${i(`type.${tp}`)}`}
+          </button>
+        ))}
+      </div>
+
+      {sorted.length === 0 ? (
+        <div style={s.emptyState}>
+          <div style={s.emptyIcon}>📋</div>
+          <p style={s.emptyText}>{i("timeline.empty")}</p>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {groups.map((group, gi) => (
+            <div key={gi}>
+              <h4 style={{ fontSize: 12, fontWeight: 600, color: t.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 8px", padding: "0 2px" }}>{group.label}</h4>
+              <div style={s.activityList}>
+                {group.entries.map((a, idx) => {
+                  const d = daysAgo(a.date);
+                  const relTime = d === 0 ? i("time.today") : d === 1 ? i("time.yesterday") : i("time.days_ago", { n: d });
+                  return (
+                    <div key={`${a.id}-${idx}`} style={s.activityItem}>
+                      <span style={s.activityIcon}>{typeIcons[a.type] || "\u{1f4dd}"}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={s.activityText}>
+                          {i(`type.${a.type}`) || i("type.note")} {i("type.with")}{" "}
+                          <strong
+                            style={{ cursor: "pointer", textDecoration: "underline", textDecorationColor: t.accentPrimary + "66", textUnderlineOffset: 2 }}
+                            onClick={() => onOpenContact(a.contactId)}
+                          >{a.contactName}</strong>
+                        </span>
+                        {a.content && <p style={s.activityContent}>{a.content.length > 120 ? a.content.slice(0, 120) + "\u2026" : a.content}</p>}
+                      </div>
+                      <span style={s.activityTime}>{relTime}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          {sorted.length > showCount && (
+            <button
+              style={{...s.filterToggle, alignSelf: "center", padding: "10px 24px"}}
+              onClick={() => setShowCount(showCount + 30)}
+            >
+              {i("timeline.show_more")}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
