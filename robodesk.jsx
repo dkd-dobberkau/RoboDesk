@@ -77,6 +77,8 @@ const translations = {
     "form.new_tag": "Neuer Tag...", "form.cancel": "Abbrechen",
     "form.save": "Speichern", "form.create": "Kontakt anlegen",
     "chart.interactions": "{n} Interaktionen", "chart.unknown": "Unbekannt",
+    "form.birthday": "Geburtstag", "form.day": "Tag", "form.month": "Monat", "form.year_optional": "Jahr (optional)",
+    "detail.birthday": "Geburtstag", "detail.age": "{n} Jahre",
   },
   en: {
     "nav.dashboard": "Dashboard", "nav.contacts": "Contacts",
@@ -140,6 +142,8 @@ const translations = {
     "form.new_tag": "New tag...", "form.cancel": "Cancel",
     "form.save": "Save", "form.create": "Create Contact",
     "chart.interactions": "{n} Interactions", "chart.unknown": "Unknown",
+    "form.birthday": "Birthday", "form.day": "Day", "form.month": "Month", "form.year_optional": "Year (optional)",
+    "detail.birthday": "Birthday", "detail.age": "{n} years",
   },
   da: {
     "nav.dashboard": "Dashboard", "nav.contacts": "Kontakter",
@@ -203,6 +207,8 @@ const translations = {
     "form.new_tag": "Nyt tag...", "form.cancel": "Afbryd",
     "form.save": "Gem", "form.create": "Opret kontakt",
     "chart.interactions": "{n} Interaktioner", "chart.unknown": "Ukendt",
+    "form.birthday": "Fødselsdag", "form.day": "Dag", "form.month": "Måned", "form.year_optional": "År (valgfrit)",
+    "detail.birthday": "Fødselsdag", "detail.age": "{n} år",
   },
   fr: {
     "nav.dashboard": "Tableau de bord", "nav.contacts": "Contacts",
@@ -266,6 +272,8 @@ const translations = {
     "form.new_tag": "Nouveau tag...", "form.cancel": "Annuler",
     "form.save": "Enregistrer", "form.create": "Créer un contact",
     "chart.interactions": "{n} Interactions", "chart.unknown": "Inconnu",
+    "form.birthday": "Anniversaire", "form.day": "Jour", "form.month": "Mois", "form.year_optional": "Année (facultatif)",
+    "detail.birthday": "Anniversaire", "detail.age": "{n} ans",
   },
 };
 
@@ -314,9 +322,32 @@ function stringToColor(str) {
   return colors[Math.abs(hash) % colors.length];
 }
 
+// ── BIRTHDAY HELPERS ──
+function calculateAge(birthday) {
+  if (!birthday || birthday.startsWith("--")) return null;
+  const [y, m, d] = birthday.split("-").map(Number);
+  const today = new Date();
+  let age = today.getFullYear() - y;
+  const monthDiff = today.getMonth() + 1 - m;
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < d)) age--;
+  return age >= 0 ? age : null;
+}
+
+function formatBirthday(birthday, lang = "de") {
+  if (!birthday) return null;
+  const hasYear = !birthday.startsWith("--");
+  const parts = hasYear ? birthday.split("-").map(Number) : [null, ...birthday.slice(2).split("-").map(Number)];
+  const [year, month, day] = parts;
+  const locale = LOCALE_MAP[lang] || "de-DE";
+  const opts = { day: "numeric", month: "long" };
+  if (hasYear) opts.year = "numeric";
+  const dateObj = new Date(hasYear ? year : 2000, month - 1, day);
+  return dateObj.toLocaleDateString(locale, opts);
+}
+
 // ── CSV HELPERS ──
-const CSV_HEADERS = ["Name","Email","Phone","Company","Role","Location","LinkedIn","Website","Notes","Tags","Relationship Type","Next Follow-Up","Last Contact","Created At"];
-const CSV_FIELDS = ["name","email","phone","company","role","location","linkedin","website","notes","tags","relationshipType","nextFollowUp","lastContact","createdAt"];
+const CSV_HEADERS = ["Name","Email","Phone","Company","Role","Location","LinkedIn","Website","Notes","Tags","Relationship Type","Next Follow-Up","Last Contact","Created At","Birthday"];
+const CSV_FIELDS = ["name","email","phone","company","role","location","linkedin","website","notes","tags","relationshipType","nextFollowUp","lastContact","createdAt","birthday"];
 
 function escapeCsvField(val) {
   if (val == null) return "";
@@ -423,6 +454,7 @@ function contactToVcard(c) {
   if (c.linkedin && c.website) lines.push("URL:" + c.website);
   if (c.notes) lines.push("NOTE:" + escapeVcf(c.notes));
   if ((c.tags || []).length > 0) lines.push("CATEGORIES:" + c.tags.join(","));
+  if (c.birthday) lines.push("BDAY:" + c.birthday);
   lines.push("END:VCARD");
   return lines.join("\r\n");
 }
@@ -469,6 +501,12 @@ function parseVcards(text) {
       }
       else if (key === "NOTE") contact.notes = unescapeVcf(val);
       else if (key === "CATEGORIES") contact.tags = val.split(",").map(t => t.trim()).filter(Boolean);
+      else if (key === "BDAY") {
+        let bday = val.trim();
+        if (/^\d{8}$/.test(bday)) bday = bday.slice(0,4) + "-" + bday.slice(4,6) + "-" + bday.slice(6,8);
+        else if (/^--\d{4}$/.test(bday)) bday = "--" + bday.slice(2,4) + "-" + bday.slice(4,6);
+        contact.birthday = bday;
+      }
     }
     return contact;
   }).filter(c => c.name);
@@ -1008,11 +1046,11 @@ export default function RoboDesk() {
       )}
 
       {view === "add" && (
-        <ContactForm onSave={addContact} onCancel={() => setView("dashboard")} tags={tags} onAddTag={(tag) => saveTags([...tags, tag])} s={s} t={t} i={i} />
+        <ContactForm onSave={addContact} onCancel={() => setView("dashboard")} tags={tags} onAddTag={(tag) => saveTags([...tags, tag])} s={s} t={t} i={i} lang={lang} />
       )}
 
       {view === "edit" && selectedContact && (
-        <ContactForm contact={selectedContact} onSave={(c) => { updateContact(c); setView("detail"); }} onCancel={() => setView("detail")} tags={tags} onAddTag={(tag) => saveTags([...tags, tag])} s={s} t={t} i={i} />
+        <ContactForm contact={selectedContact} onSave={(c) => { updateContact(c); setView("detail"); }} onCancel={() => setView("detail")} tags={tags} onAddTag={(tag) => saveTags([...tags, tag])} s={s} t={t} i={i} lang={lang} />
       )}
 
       {view === "detail" && selectedContact && (
@@ -1488,6 +1526,7 @@ function ContactDetail({ contact, onEdit, onDelete, onBack, onAddInteraction, on
             {contact.location && <p style={s.fieldLine}>📍 {contact.location}</p>}
             {contact.linkedin && <p style={s.fieldLine}>🔗 <a href={contact.linkedin} target="_blank" rel="noreferrer" style={s.link}>LinkedIn</a></p>}
             {contact.website && <p style={s.fieldLine}>🌐 <a href={contact.website} target="_blank" rel="noreferrer" style={s.link}>{contact.website}</a></p>}
+            {contact.birthday && <p style={s.fieldLine}>🎂 {formatBirthday(contact.birthday, lang)}{calculateAge(contact.birthday) != null ? ` (${i("detail.age", { n: calculateAge(contact.birthday) })})` : ""}</p>}
           </div>
         </div>
 
@@ -1554,10 +1593,10 @@ function ContactDetail({ contact, onEdit, onDelete, onBack, onAddInteraction, on
 }
 
 // ── CONTACT FORM ──
-function ContactForm({ contact, onSave, onCancel, tags, onAddTag, s, t, i }) {
+function ContactForm({ contact, onSave, onCancel, tags, onAddTag, s, t, i, lang }) {
   const [form, setForm] = useState(contact || {
     name: "", email: "", phone: "", company: "", role: "",
-    location: "", linkedin: "", website: "",
+    location: "", linkedin: "", website: "", birthday: "",
     notes: "", tags: [], relationshipType: "",
     nextFollowUp: null, lastContact: null
   });
@@ -1607,6 +1646,35 @@ function ContactForm({ contact, onSave, onCancel, tags, onAddTag, s, t, i }) {
           <div style={s.formGroup}>
             <label style={s.label}>{i("form.location")}</label>
             <input style={s.input} value={form.location} onChange={e => set("location", e.target.value)} placeholder={i("form.location_placeholder")} />
+          </div>
+          <div style={s.formGroup}>
+            <label style={s.label}>{i("form.birthday")}</label>
+            {(() => {
+              const bd = form.birthday || "";
+              const hasYear = bd && !bd.startsWith("--");
+              const parts = bd ? (hasYear ? bd.split("-").map(Number) : [null, ...bd.slice(2).split("-").map(Number)]) : [null, null, null];
+              const [bYear, bMonth, bDay] = parts;
+              const updateBirthday = (d, m, y) => {
+                if (!d && !m) { set("birthday", ""); return; }
+                const dd = String(d || 1).padStart(2, "0");
+                const mm = String(m || 1).padStart(2, "0");
+                set("birthday", y ? `${y}-${mm}-${dd}` : `--${mm}-${dd}`);
+              };
+              const months = Array.from({ length: 12 }, (_, idx) => {
+                const label = new Date(2000, idx, 1).toLocaleDateString(LOCALE_MAP[lang] || "de-DE", { month: "long" });
+                return { value: idx + 1, label };
+              });
+              return (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input style={{ ...s.input, flex: "0 0 60px", textAlign: "center" }} type="number" min="1" max="31" placeholder={i("form.day")} value={bDay || ""} onChange={e => updateBirthday(parseInt(e.target.value) || null, bMonth, bYear)} />
+                  <select style={{ ...s.input, flex: "1 1 auto" }} value={bMonth || ""} onChange={e => updateBirthday(bDay, parseInt(e.target.value) || null, bYear)}>
+                    <option value="">{i("form.month")}</option>
+                    {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  </select>
+                  <input style={{ ...s.input, flex: "0 0 80px", textAlign: "center" }} type="number" min="1900" max="2100" placeholder={i("form.year_optional")} value={bYear || ""} onChange={e => updateBirthday(bDay, bMonth, parseInt(e.target.value) || null)} />
+                </div>
+              );
+            })()}
           </div>
           <div style={s.formGroup}>
             <label style={s.label}>{i("form.linkedin")}</label>
